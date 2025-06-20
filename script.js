@@ -28,6 +28,7 @@ class TimerHub {
         this.customAvatar = null;
         this.checkingNickAvailability = false;
         this.nickAvailabilityTimeout = null;
+        this.sessionTimeoutInterval = null;
         this.formData = {
             login: {},
             register: {}
@@ -53,6 +54,17 @@ class TimerHub {
             compactMode: false
         };
         
+        // Initialize app when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => this.init());
+        } else {
+            this.init();
+        }
+    }
+    
+    init() {
+        console.log('Initializing Timer Hub...');
+        
         // Clean up old Google auth data
         this.cleanupOldAuthData();
         
@@ -61,9 +73,6 @@ class TimerHub {
         
         // Load settings
         this.loadSettings();
-        
-        // Wait for Firebase to be available
-        this.waitForFirebase();
         
         // Set max birthdate (must be at least 13 years old)
         const maxBirthdate = new Date();
@@ -75,6 +84,133 @@ class TimerHub {
         
         // Save form data on input
         this.setupFormDataPersistence();
+        
+        // Setup message context menu
+        this.setupMessageContextMenu();
+        
+        // Set today's date as default
+        const today = new Date().toISOString().split('T')[0];
+        const meetingDateEl = document.getElementById('meetingDate');
+        const videoDateEl = document.getElementById('videoDate');
+        if (meetingDateEl) meetingDateEl.value = today;
+        if (videoDateEl) videoDateEl.value = today;
+        
+        // Wait for Firebase to be available
+        this.waitForFirebase();
+    }
+    
+    waitForFirebase() {
+        let attempts = 0;
+        const maxAttempts = 50; // 5 seconds
+        
+        const checkFirebase = setInterval(() => {
+            attempts++;
+            
+            if (window.firebase && window.firebase.auth && window.firebase.database) {
+                clearInterval(checkFirebase);
+                console.log('Firebase is ready');
+                this.isFirebaseReady = true;
+                this.initializeFirebase();
+            } else if (attempts >= maxAttempts) {
+                clearInterval(checkFirebase);
+                console.error('Firebase failed to load after 5 seconds');
+                this.showNotification('Błąd ładowania Firebase. Odśwież stronę.', 'error');
+                // Show login screen anyway
+                document.getElementById('loginScreen').style.display = 'flex';
+                document.getElementById('loadingScreen').style.display = 'none';
+            }
+        }, 100);
+    }
+    
+    initializeFirebase() {
+        console.log('Initializing Firebase services...');
+        
+        // Update loading status
+        const loadingStatus = document.getElementById('loadingStatus');
+        if (loadingStatus) {
+            loadingStatus.textContent = 'Sprawdzanie autoryzacji...';
+        }
+        
+        // Listen for auth state changes
+        window.firebase.onAuthStateChanged(window.firebase.auth, async (user) => {
+            console.log('Auth state changed:', user ? user.uid : 'no user');
+            
+            if (user) {
+                this.firebaseUser = user;
+                
+                // Check if we have saved user data
+                const savedUser = localStorage.getItem('currentUser');
+                if (savedUser) {
+                    try {
+                        this.currentUser = JSON.parse(savedUser);
+                        
+                        // Check session validity
+                        if (this.checkSessionValid()) {
+                            // Setup user after authentication
+                            await this.setupUserAfterAuth();
+                            // Show app
+                            this.showApp();
+                        } else {
+                            // Session expired
+                            this.logout();
+                        }
+                    } catch (error) {
+                        console.error('Error parsing saved user:', error);
+                        this.showLoginScreen();
+                    }
+                } else {
+                    // No saved user data, show login
+                    this.showLoginScreen();
+                }
+            } else {
+                // No Firebase user
+                this.firebaseUser = null;
+                
+                // Check if we have saved user data
+                const savedUser = localStorage.getItem('currentUser');
+                if (savedUser) {
+                    try {
+                        this.currentUser = JSON.parse(savedUser);
+                        
+                        // Check session validity
+                        if (this.checkSessionValid()) {
+                            // Try to re-authenticate
+                            console.log('Attempting to restore session...');
+                            // For now, just show login
+                            this.showLoginScreen();
+                        } else {
+                            // Session expired
+                            localStorage.removeItem('currentUser');
+                            this.showLoginScreen();
+                        }
+                    } catch (error) {
+                        console.error('Error parsing saved user:', error);
+                        this.showLoginScreen();
+                    }
+                } else {
+                    // No user logged in
+                    this.showLoginScreen();
+                }
+            }
+        });
+    }
+    
+    showLoginScreen() {
+        console.log('Showing login screen...');
+        document.getElementById('loginScreen').style.display = 'flex';
+        document.getElementById('loadingScreen').style.display = 'none';
+        document.querySelector('.container').style.display = 'none';
+    }
+    
+    checkSessionValid() {
+        if (!this.currentUser || !this.currentUser.sessionExpiry) return false;
+        
+        if (this.currentUser.sessionExpiry === 'forever') return true;
+        
+        const now = new Date();
+        const expiry = new Date(this.currentUser.sessionExpiry);
+        
+        return now < expiry;
     }
     
     // Clean up old authentication data
@@ -344,7 +480,7 @@ class TimerHub {
     
     // Login Handler
     async handleLogin(event) {
-        event.preventDefault();
+        if (event) event.preventDefault();
         
         const nick = document.getElementById('loginNick').value.trim();
         const password = document.getElementById('loginPassword').value;
@@ -356,6 +492,17 @@ class TimerHub {
             return;
         }
         
+        // Validate inputs
+        if (!nick || nick.length < 3) {
+            this.showNotification('Nick musi mieć minimum 3 znaki', 'error');
+            return;
+        }
+        
+        if (!password || password.length < 6) {
+            this.showNotification('Hasło musi mieć minimum 6 znaków', 'error');
+            return;
+        }
+        
         // Disable submit button and show loading
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logowanie...';
@@ -364,12 +511,16 @@ class TimerHub {
             // Create email from nick (nick@cobra.auth)
             const email = `${nick.toLowerCase()}@cobra.auth`;
             
+            console.log('Attempting login with email:', email);
+            
             // Sign in with Firebase
             const userCredential = await window.firebase.signInWithEmailAndPassword(
                 window.firebase.auth, 
                 email, 
                 password
             );
+            
+            console.log('Login successful:', userCredential.user.uid);
             
             this.firebaseUser = userCredential.user;
             
@@ -393,6 +544,9 @@ class TimerHub {
                 
                 // Save to localStorage
                 localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+                
+                // Setup user after authentication
+                await this.setupUserAfterAuth();
                 
                 // Show app
                 this.showApp();
@@ -424,7 +578,7 @@ class TimerHub {
     
     // Register Handler
     async handleRegister(event) {
-        event.preventDefault();
+        if (event) event.preventDefault();
         
         const nick = document.getElementById('registerNick').value.trim();
         const birthdate = document.getElementById('registerBirthdate').value;
@@ -434,8 +588,18 @@ class TimerHub {
         const submitBtn = document.getElementById('registerSubmitBtn');
         
         // Validation
+        if (!nick || nick.length < 3) {
+            this.showNotification('Nick musi mieć minimum 3 znaki', 'error');
+            return;
+        }
+        
         if (password !== passwordConfirm) {
             this.showNotification('Hasła nie są identyczne', 'error');
+            return;
+        }
+        
+        if (password.length < 6) {
+            this.showNotification('Hasło musi mieć minimum 6 znaków', 'error');
             return;
         }
         
@@ -484,12 +648,16 @@ class TimerHub {
             // Create email from nick
             const email = `${nick.toLowerCase()}@cobra.auth`;
             
+            console.log('Creating account with email:', email);
+            
             // Create user with Firebase
             const userCredential = await window.firebase.createUserWithEmailAndPassword(
                 window.firebase.auth, 
                 email, 
                 password
             );
+            
+            console.log('Account created:', userCredential.user.uid);
             
             this.firebaseUser = userCredential.user;
             
@@ -524,6 +692,9 @@ class TimerHub {
             localStorage.removeItem('formData_registerNick');
             localStorage.removeItem('formData_registerBirthdate');
             
+            // Setup user after authentication
+            await this.setupUserAfterAuth();
+            
             // Show app
             this.showApp();
             this.showNotification(`Witaj w Timer Hub, ${nick}!`, 'success');
@@ -549,7 +720,7 @@ class TimerHub {
     
     // Forgot Password Handler
     async handleForgotPassword(event) {
-        event.preventDefault();
+        if (event) event.preventDefault();
         
         const nick = document.getElementById('forgotNick').value.trim();
         
@@ -606,6 +777,118 @@ class TimerHub {
         }
     }
     
+    async setupUserAfterAuth() {
+        if (!this.firebaseUser || !this.isFirebaseReady) return;
+        
+        try {
+            await this.setupUserPresence();
+            await this.syncUserData();
+            this.listenToChat();
+            this.listenToMessageReads();
+            this.listenToOnlineUsers();
+            this.listenToPrivateMessages();
+            await this.loadAllUsersFromFirebase();
+            this.updateOnlineUsers();
+            this.loadLastReadMessage();
+        } catch (error) {
+            console.error('Error setting up user after auth:', error);
+        }
+    }
+    
+    async showApp() {
+        console.log('Showing app...');
+        
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('loadingScreen').style.display = 'flex';
+        
+        // Update loading status
+        const loadingStatus = document.getElementById('loadingStatus');
+        if (loadingStatus) {
+            loadingStatus.textContent = 'Ładowanie aplikacji...';
+        }
+        
+        // Small delay to ensure DOM is ready
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        document.querySelector('.container').style.display = 'block';
+        
+        // Set user data in UI
+        document.getElementById('userName').textContent = this.currentUser.nick;
+        document.getElementById('userAvatar').src = this.currentUser.picture;
+        document.getElementById('welcomeName').textContent = this.currentUser.nick;
+        
+        // Set account info in settings
+        document.getElementById('accountNick').textContent = this.currentUser.nick;
+        document.getElementById('accountBirthdate').textContent = new Date(this.currentUser.birthdate).toLocaleDateString(this.settings.region);
+        document.getElementById('accountCreated').textContent = new Date(this.currentUser.createdAt).toLocaleDateString(this.settings.region);
+        document.getElementById('accountSessionTime').textContent = this.getSessionTimeString(this.currentUser.sessionExpiry);
+        
+        // Load custom avatar if exists
+        this.loadCustomAvatar();
+        
+        // Hide loading screen
+        setTimeout(() => {
+            document.getElementById('loadingScreen').style.display = 'none';
+        }, 1500);
+        
+        // Update current time
+        this.updateCurrentTime();
+        setInterval(() => this.updateCurrentTime(), 1000);
+        
+        // Update stats
+        this.updateStats();
+        
+        // Load theme
+        this.loadTheme();
+        
+        // Apply settings
+        this.applySettings();
+        
+        // Check for active timers
+        this.checkActiveTimers();
+        
+        // Load user data
+        this.loadUserDataFromLocalStorage();
+    }
+    
+    logout() {
+        if (confirm('Czy na pewno chcesz się wylogować?')) {
+            // Stop timers
+            if (this.timerInterval) {
+                clearInterval(this.timerInterval);
+            }
+            
+            // Sign out from Firebase
+            if (this.firebaseUser && this.isFirebaseReady) {
+                window.firebase.signOut(window.firebase.auth).catch(error => {
+                    console.error('Firebase signout error:', error);
+                });
+            }
+            
+            // Clear presence
+            if (this.presenceRef && this.isFirebaseReady) {
+                window.firebase.set(this.presenceRef, {
+                    state: 'offline',
+                    last_changed: window.firebase.serverTimestamp()
+                }).catch(error => {
+                    console.error('Error setting offline presence:', error);
+                });
+            }
+            
+            // Clear local data
+            localStorage.removeItem('currentUser');
+            
+            // Clear session timeout
+            if (this.sessionTimeoutInterval) {
+                clearInterval(this.sessionTimeoutInterval);
+            }
+            
+            // Reload page
+            location.reload();
+        }
+    }
+    
+    // Settings methods
     loadSettings() {
         const savedSettings = localStorage.getItem('timerHubSettings');
         if (savedSettings) {
@@ -656,21 +939,36 @@ class TimerHub {
         }
         
         // Update UI elements
-        document.getElementById('enableNotifications').checked = this.settings.notifications;
-        document.getElementById('enableChatNotifications').checked = this.settings.chatNotifications;
-        document.getElementById('enableTimerNotifications').checked = this.settings.timerNotifications;
-        document.getElementById('enablePushNotifications').checked = this.settings.pushNotifications;
-        document.getElementById('regionSelect').value = this.settings.region;
-        document.getElementById('timeFormat').value = this.settings.timeFormat;
-        document.getElementById('deviceOptimization').value = this.settings.deviceOptimization;
-        document.getElementById('enableAnimations').checked = this.settings.animations;
-        document.getElementById('reducedMotion').checked = this.settings.reducedMotion;
-        document.getElementById('showOnlineStatus').checked = this.settings.showOnlineStatus;
-        document.getElementById('showReadReceipts').checked = this.settings.showReadReceipts;
-        document.getElementById('colorTheme').value = this.settings.colorTheme;
-        document.getElementById('fontSize').value = this.settings.fontSize;
-        document.getElementById('cardStyle').value = this.settings.cardStyle;
-        document.getElementById('enableCompactMode').checked = this.settings.compactMode;
+        const settingsElements = {
+            'enableNotifications': this.settings.notifications,
+            'enableChatNotifications': this.settings.chatNotifications,
+            'enableTimerNotifications': this.settings.timerNotifications,
+            'enablePushNotifications': this.settings.pushNotifications,
+            'showOnlineStatus': this.settings.showOnlineStatus,
+            'showReadReceipts': this.settings.showReadReceipts,
+            'enableAnimations': this.settings.animations,
+            'reducedMotion': this.settings.reducedMotion,
+            'enableCompactMode': this.settings.compactMode
+        };
+        
+        Object.entries(settingsElements).forEach(([id, value]) => {
+            const element = document.getElementById(id);
+            if (element) element.checked = value;
+        });
+        
+        const selectElements = {
+            'regionSelect': this.settings.region,
+            'timeFormat': this.settings.timeFormat,
+            'deviceOptimization': this.settings.deviceOptimization,
+            'colorTheme': this.settings.colorTheme,
+            'fontSize': this.settings.fontSize,
+            'cardStyle': this.settings.cardStyle
+        };
+        
+        Object.entries(selectElements).forEach(([id, value]) => {
+            const element = document.getElementById(id);
+            if (element) element.value = value;
+        });
     }
     
     // Avatar management
@@ -1071,60 +1369,6 @@ class TimerHub {
         }
     }
     
-    waitForFirebase() {
-        const checkFirebase = setInterval(() => {
-            if (window.firebase && window.firebase.auth) {
-                clearInterval(checkFirebase);
-                this.initializeFirebase();
-            }
-        }, 100);
-        
-        // Timeout after 5 seconds
-        setTimeout(() => {
-            clearInterval(checkFirebase);
-            if (!this.isFirebaseReady) {
-                console.error('Firebase failed to load');
-                this.init();
-            }
-        }, 5000);
-    }
-    
-    initializeFirebase() {
-        this.isFirebaseReady = true;
-        console.log('Firebase is ready');
-        
-        // Listen for auth state changes
-        window.firebase.onAuthStateChanged(window.firebase.auth, async (user) => {
-            if (user) {
-                console.log('Firebase user authenticated:', user.uid);
-                this.firebaseUser = user;
-                
-                // Setup user after authentication
-                await this.setupUserAfterAuth();
-            } else {
-                console.log('No Firebase user detected');
-                this.firebaseUser = null;
-            }
-        });
-        
-        // Initialize app
-        this.init();
-    }
-    
-    async setupUserAfterAuth() {
-        if (!this.firebaseUser || !this.isFirebaseReady) return;
-        
-        await this.setupUserPresence();
-        await this.syncUserData();
-        this.listenToChat();
-        this.listenToMessageReads();
-        this.listenToOnlineUsers();
-        this.listenToPrivateMessages();
-        this.loadAllUsersFromFirebase();
-        this.updateOnlineUsers();
-        this.loadLastReadMessage();
-    }
-    
     async updateFirebaseUserProfile() {
         if (!this.firebaseUser || !this.isFirebaseReady || !this.currentUser) return;
         
@@ -1145,60 +1389,6 @@ class TimerHub {
         } catch (error) {
             console.error('Error updating Firebase profile:', error);
         }
-    }
-    
-    init() {
-        // Check if user is logged in
-        const savedUser = localStorage.getItem('currentUser');
-        if (savedUser) {
-            try {
-                this.currentUser = JSON.parse(savedUser);
-                
-                // Check session validity
-                if (this.currentUser.sessionExpiry) {
-                    const now = new Date();
-                    const expiry = new Date(this.currentUser.sessionExpiry);
-                    
-                    if (this.currentUser.sessionExpiry !== 'forever' && now > expiry) {
-                        // Session expired
-                        localStorage.removeItem('currentUser');
-                        this.currentUser = null;
-                        this.showNotification('Sesja wygasła. Zaloguj się ponownie.', 'warning');
-                        document.getElementById('loginScreen').style.display = 'flex';
-                        document.getElementById('loadingScreen').style.display = 'none';
-                        return;
-                    }
-                }
-                
-                // Auto-login with Firebase if we have credentials
-                if (this.isFirebaseReady && !this.firebaseUser) {
-                    // Try to restore session
-                    console.log('Attempting to restore Firebase session...');
-                }
-                
-                this.showApp();
-            } catch (error) {
-                console.error('Error parsing saved user:', error);
-                localStorage.removeItem('currentUser');
-                // Show login screen if error
-                document.getElementById('loginScreen').style.display = 'flex';
-                document.getElementById('loadingScreen').style.display = 'none';
-            }
-        } else {
-            // No user logged in - show login screen
-            document.getElementById('loginScreen').style.display = 'flex';
-            document.getElementById('loadingScreen').style.display = 'none';
-        }
-        
-        // Set today's date as default
-        const today = new Date().toISOString().split('T')[0];
-        const meetingDateEl = document.getElementById('meetingDate');
-        const videoDateEl = document.getElementById('videoDate');
-        if (meetingDateEl) meetingDateEl.value = today;
-        if (videoDateEl) videoDateEl.value = today;
-        
-        // Setup message context menu
-        this.setupMessageContextMenu();
     }
     
     setupMessageContextMenu() {
@@ -2103,102 +2293,6 @@ class TimerHub {
             });
         } catch (error) {
             console.error('Error updating online users:', error);
-        }
-    }
-    
-    escapeHtml(text) {
-        const map = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#039;'
-        };
-        return text.replace(/[&<>"']/g, m => map[m]);
-    }
-    
-    async showApp() {
-        document.getElementById('loginScreen').style.display = 'none';
-        document.getElementById('loadingScreen').style.display = 'flex';
-        
-        // Small delay to ensure DOM is ready
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        document.querySelector('.container').style.display = 'block';
-        
-        // Set user data in UI
-        document.getElementById('userName').textContent = this.currentUser.nick;
-        document.getElementById('userAvatar').src = this.currentUser.picture;
-        document.getElementById('welcomeName').textContent = this.currentUser.nick;
-        
-        // Set account info in settings
-        document.getElementById('accountNick').textContent = this.currentUser.nick;
-        document.getElementById('accountBirthdate').textContent = new Date(this.currentUser.birthdate).toLocaleDateString(this.settings.region);
-        document.getElementById('accountCreated').textContent = new Date(this.currentUser.createdAt).toLocaleDateString(this.settings.region);
-        document.getElementById('accountSessionTime').textContent = this.getSessionTimeString(this.currentUser.sessionExpiry);
-        
-        // Load custom avatar if exists
-        this.loadCustomAvatar();
-        
-        // Hide loading screen
-        setTimeout(() => {
-            document.getElementById('loadingScreen').style.display = 'none';
-        }, 2500);
-        
-        // Update current time
-        this.updateCurrentTime();
-        setInterval(() => this.updateCurrentTime(), 1000);
-        
-        // Update stats
-        this.updateStats();
-        
-        // Load theme
-        this.loadTheme();
-        
-        // Apply settings
-        this.applySettings();
-        
-        // Check for active timers
-        this.checkActiveTimers();
-        
-        // Load user data
-        this.loadUserDataFromLocalStorage();
-    }
-    
-    logout() {
-        if (confirm('Czy na pewno chcesz się wylogować?')) {
-            // Stop timers
-            if (this.timerInterval) {
-                clearInterval(this.timerInterval);
-            }
-            
-            // Sign out from Firebase
-            if (this.firebaseUser && this.isFirebaseReady) {
-                window.firebase.signOut(window.firebase.auth).catch(error => {
-                    console.error('Firebase signout error:', error);
-                });
-            }
-            
-            // Clear presence
-            if (this.presenceRef && this.isFirebaseReady) {
-                window.firebase.set(this.presenceRef, {
-                    state: 'offline',
-                    last_changed: window.firebase.serverTimestamp()
-                }).catch(error => {
-                    console.error('Error setting offline presence:', error);
-                });
-            }
-            
-            // Clear local data
-            localStorage.removeItem('currentUser');
-            
-            // Clear session timeout
-            if (this.sessionTimeoutInterval) {
-                clearInterval(this.sessionTimeoutInterval);
-            }
-            
-            // Reload page
-            location.reload();
         }
     }
     
@@ -3125,10 +3219,13 @@ class TimerHub {
         const timeString = now.toLocaleTimeString(this.settings.region, timeOptions);
         const dateString = now.toLocaleDateString(this.settings.region, dateOptions);
         
-        document.getElementById('currentTime').innerHTML = `
-            ${timeString}<br>
-            <span style="font-size: 0.8em; opacity: 0.8;">${dateString}</span>
-        `;
+        const timeDisplay = document.getElementById('currentTime');
+        if (timeDisplay) {
+            timeDisplay.innerHTML = `
+                ${timeString}<br>
+                <span style="font-size: 0.8em; opacity: 0.8;">${dateString}</span>
+            `;
+        }
     }
     
     updateStats() {
@@ -3173,27 +3270,40 @@ class TimerHub {
         `;
         
         const container = document.getElementById('notifications');
-        container.appendChild(notification);
-        
-        // Animate in
-        setTimeout(() => notification.classList.add('show'), 10);
-        
-        // Remove after 5 seconds
-        setTimeout(() => {
-            notification.classList.remove('show');
-            setTimeout(() => notification.remove(), 300);
-        }, 5000);
+        if (container) {
+            container.appendChild(notification);
+            
+            // Animate in
+            setTimeout(() => notification.classList.add('show'), 10);
+            
+            // Remove after 5 seconds
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.remove(), 300);
+            }, 5000);
+        }
+    }
+    
+    escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, m => map[m]);
     }
 }
 
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    // Hide login screen by default
-    document.getElementById('loginScreen').style.display = 'none';
-    
-    // Create app instance
-    window.app = new TimerHub();
+    console.log('DOM loaded, initializing Timer Hub...');
 });
+
+// Create app instance
+console.log('Creating Timer Hub instance...');
+window.app = new TimerHub();
 
 // Prevent closing tab with active timer
 window.addEventListener('beforeunload', (e) => {
@@ -3203,9 +3313,44 @@ window.addEventListener('beforeunload', (e) => {
     }
 });
 
-// Service Worker for offline functionality
+// Service Worker for offline functionality and PWA
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(error => {
-        console.log('Service Worker registration failed:', error);
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then(registration => {
+            console.log('ServiceWorker registration successful:', registration.scope);
+        }).catch(error => {
+            console.log('ServiceWorker registration failed:', error);
+        });
     });
 }
+
+// Handle online/offline status
+window.addEventListener('online', () => {
+    if (window.app) {
+        window.app.showNotification('Połączenie internetowe przywrócone', 'success');
+        // Try to sync data
+        if (window.app.firebaseUser) {
+            window.app.syncUserData();
+        }
+    }
+});
+
+window.addEventListener('offline', () => {
+    if (window.app) {
+        window.app.showNotification('Brak połączenia internetowego', 'warning');
+    }
+});
+
+// Handle visibility change (tab switching)
+document.addEventListener('visibilitychange', () => {
+    if (window.app && window.app.currentTimer && !document.hidden) {
+        // Update timer display when tab becomes visible
+        window.app.updateTimer();
+    }
+});
+
+// Console easter egg
+console.log('%cTimer Hub', 'font-size: 24px; font-weight: bold; color: #6366f1;');
+console.log('%cBy Piotr20111 | Version 1.0.0', 'font-size: 12px; color: #8b5cf6;');
+console.log('%c⚠️ Uwaga!', 'font-size: 16px; font-weight: bold; color: #ef4444;');
+console.log('%cWklejanie tutaj kodu może narazić Twoje konto na przejęcie przez osoby trzecie.', 'font-size: 14px; color: #f59e0b;');
