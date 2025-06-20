@@ -1,4 +1,4 @@
-// Timer Hub Application with Firebase Integration
+// Timer Hub Application with Cobra Authentication
 class TimerHub {
     constructor() {
         this.currentTimer = null;
@@ -23,9 +23,16 @@ class TimerHub {
         this.selectedMessageId = null;
         this.currentPrivateChat = null;
         this.onlineUsers = {};
-        this.allUsers = {}; // Store all users that have been online
-        this.processedUsers = new Set(); // Track processed users to avoid duplicates
-        this.customAvatar = null; // Store custom avatar selection
+        this.allUsers = {};
+        this.processedUsers = new Set();
+        this.customAvatar = null;
+        this.checkingNickAvailability = false;
+        this.nickAvailabilityTimeout = null;
+        this.sessionTimeoutInterval = null;
+        this.formData = {
+            login: {},
+            register: {}
+        };
         
         // Settings
         this.settings = {
@@ -47,14 +54,310 @@ class TimerHub {
             compactMode: false
         };
         
+        // Initialize app when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => this.init());
+        } else {
+            this.init();
+        }
+    }
+    
+    init() {
+        console.log('Initializing Timer Hub...');
+        
+        // Clean up old Google auth data
+        this.cleanupOldAuthData();
+        
         // Security measures
         this.initSecurityMeasures();
         
         // Load settings
         this.loadSettings();
         
+        // Set max birthdate (must be at least 13 years old)
+        const maxBirthdate = new Date();
+        maxBirthdate.setFullYear(maxBirthdate.getFullYear() - 13);
+        const birthdateInput = document.getElementById('registerBirthdate');
+        if (birthdateInput) {
+            birthdateInput.max = maxBirthdate.toISOString().split('T')[0];
+        }
+        
+        // Save form data on input
+        this.setupFormDataPersistence();
+        
+        // Setup message context menu
+        this.setupMessageContextMenu();
+        
+        // Set today's date as default
+        const today = new Date().toISOString().split('T')[0];
+        const meetingDateEl = document.getElementById('meetingDate');
+        const videoDateEl = document.getElementById('videoDate');
+        if (meetingDateEl) meetingDateEl.value = today;
+        if (videoDateEl) videoDateEl.value = today;
+        
+        // Setup form event listeners
+        this.setupFormEventListeners();
+        
         // Wait for Firebase to be available
         this.waitForFirebase();
+    }
+    
+    setupFormEventListeners() {
+        // Login form
+        const loginForm = document.getElementById('loginForm');
+        if (loginForm) {
+            loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handleLogin(e);
+            });
+        }
+        
+        // Register form
+        const registerForm = document.getElementById('registerForm');
+        if (registerForm) {
+            registerForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handleRegister(e);
+            });
+        }
+        
+        // Forgot password form
+        const forgotForm = document.getElementById('forgotPasswordForm');
+        if (forgotForm) {
+            forgotForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handleForgotPassword(e);
+            });
+        }
+    }
+    
+    waitForFirebase() {
+        console.log('Waiting for Firebase...');
+        
+        // Listen for Firebase ready event
+        window.addEventListener('firebaseReady', () => {
+            console.log('Firebase ready event received');
+            this.isFirebaseReady = true;
+            this.initializeFirebase();
+        });
+        
+        // Also check if Firebase is already available
+        setTimeout(() => {
+            if (window.firebase && window.firebase.auth && window.firebase.database) {
+                console.log('Firebase already available');
+                this.isFirebaseReady = true;
+                this.initializeFirebase();
+            }
+        }, 100);
+    }
+    
+    initializeFirebase() {
+        console.log('Initializing Firebase services...');
+        
+        if (!window.firebase || !window.firebase.auth || !window.firebase.database) {
+            console.error('Firebase not properly initialized');
+            this.showNotification('Błąd inicjalizacji Firebase', 'error');
+            return;
+        }
+        
+        // Update loading status
+        const loadingStatus = document.getElementById('loadingStatus');
+        if (loadingStatus) {
+            loadingStatus.textContent = 'Sprawdzanie autoryzacji...';
+        }
+        
+        // Listen for auth state changes
+        window.firebase.onAuthStateChanged(window.firebase.auth, async (user) => {
+            console.log('Auth state changed:', user ? user.uid : 'no user');
+            
+            if (user) {
+                this.firebaseUser = user;
+                
+                // Check if we have saved user data
+                const savedUser = localStorage.getItem('currentUser');
+                if (savedUser) {
+                    try {
+                        this.currentUser = JSON.parse(savedUser);
+                        
+                        // Check session validity
+                        if (this.checkSessionValid()) {
+                            // Setup user after authentication
+                            await this.setupUserAfterAuth();
+                            // Show app
+                            this.showApp();
+                        } else {
+                            // Session expired
+                            this.logout(false);
+                        }
+                    } catch (error) {
+                        console.error('Error parsing saved user:', error);
+                        this.showLoginScreen();
+                    }
+                } else {
+                    // No saved user data, show login
+                    this.showLoginScreen();
+                }
+            } else {
+                // No Firebase user
+                this.firebaseUser = null;
+                this.showLoginScreen();
+            }
+        });
+    }
+    
+    showLoginScreen() {
+        console.log('Showing login screen...');
+        document.getElementById('loginScreen').style.display = 'flex';
+        document.getElementById('loadingScreen').style.display = 'none';
+        document.querySelector('.container').style.display = 'none';
+    }
+    
+    checkSessionValid() {
+        if (!this.currentUser || !this.currentUser.sessionExpiry) return false;
+        
+        if (this.currentUser.sessionExpiry === 'forever') return true;
+        
+        const now = new Date();
+        const expiry = new Date(this.currentUser.sessionExpiry);
+        
+        return now < expiry;
+    }
+    
+    // Clean up old authentication data
+    cleanupOldAuthData() {
+        // Remove any Google auth related data
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (key.includes('google') || key.includes('auth0') || key.includes('firebase:authUser'))) {
+                keysToRemove.push(key);
+            }
+        }
+        
+        keysToRemove.forEach(key => {
+            localStorage.removeItem(key);
+        });
+        
+        // Remove old user data format
+        if (localStorage.getItem('user')) {
+            localStorage.removeItem('user');
+        }
+    }
+    
+    // Setup form data persistence
+    setupFormDataPersistence() {
+        // Login form
+        ['loginNick', 'loginRemember'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                // Load saved value
+                const savedValue = localStorage.getItem(`formData_${id}`);
+                if (savedValue) {
+                    element.value = savedValue;
+                }
+                
+                // Save on change
+                element.addEventListener('input', () => {
+                    localStorage.setItem(`formData_${id}`, element.value);
+                });
+            }
+        });
+        
+        // Register form
+        ['registerNick', 'registerBirthdate'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                // Load saved value
+                const savedValue = localStorage.getItem(`formData_${id}`);
+                if (savedValue) {
+                    element.value = savedValue;
+                }
+                
+                // Save on change
+                element.addEventListener('input', () => {
+                    localStorage.setItem(`formData_${id}`, element.value);
+                });
+            }
+        });
+    }
+    
+    // Toggle password visibility
+    togglePasswordVisibility(inputId) {
+        const input = document.getElementById(inputId);
+        const button = input.nextElementSibling;
+        const icon = button.querySelector('i');
+        
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        } else {
+            input.type = 'password';
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        }
+    }
+    
+    // Check nick availability
+    async checkNickAvailability() {
+        const nickInput = document.getElementById('registerNick');
+        const nickStatus = document.getElementById('nickAvailability');
+        const nick = nickInput.value.trim();
+        
+        // Clear previous timeout
+        if (this.nickAvailabilityTimeout) {
+            clearTimeout(this.nickAvailabilityTimeout);
+        }
+        
+        // Reset status if nick is too short
+        if (nick.length < 3) {
+            nickStatus.textContent = '';
+            nickStatus.className = 'nick-status';
+            return;
+        }
+        
+        // Show checking status
+        nickStatus.textContent = 'Sprawdzanie dostępności...';
+        nickStatus.className = 'nick-status checking';
+        
+        // Debounce the check
+        this.nickAvailabilityTimeout = setTimeout(async () => {
+            if (!this.isFirebaseReady) {
+                nickStatus.textContent = 'Nie można sprawdzić dostępności';
+                nickStatus.className = 'nick-status';
+                return;
+            }
+            
+            try {
+                // Check if nick is already taken
+                const usersRef = window.firebase.ref(window.firebase.database, 'users');
+                const usersSnapshot = await window.firebase.get(usersRef);
+                
+                let nickTaken = false;
+                if (usersSnapshot.exists()) {
+                    usersSnapshot.forEach((userSnapshot) => {
+                        const userData = userSnapshot.val();
+                        if (userData.profile && userData.profile.nick.toLowerCase() === nick.toLowerCase()) {
+                            nickTaken = true;
+                        }
+                    });
+                }
+                
+                if (nickTaken) {
+                    nickStatus.textContent = '✗ Ten nick jest już zajęty';
+                    nickStatus.className = 'nick-status taken';
+                    nickInput.setCustomValidity('Ten nick jest już zajęty');
+                } else {
+                    nickStatus.textContent = '✓ Nick jest dostępny';
+                    nickStatus.className = 'nick-status available';
+                    nickInput.setCustomValidity('');
+                }
+            } catch (error) {
+                console.error('Error checking nick availability:', error);
+                nickStatus.textContent = 'Błąd sprawdzania dostępności';
+                nickStatus.className = 'nick-status';
+            }
+        }, 500); // 500ms debounce
     }
     
     // Security initialization
@@ -73,23 +376,79 @@ class TimerHub {
             }
         });
         
-        // Session timeout after 30 minutes of inactivity
-        this.resetSessionTimeout();
-        document.addEventListener('click', () => this.resetSessionTimeout());
-        document.addEventListener('keypress', () => this.resetSessionTimeout());
+        // Session timeout based on remember me setting
+        this.setupSessionTimeout();
     }
     
-    resetSessionTimeout() {
-        if (this.sessionTimeout) {
-            clearTimeout(this.sessionTimeout);
+    setupSessionTimeout() {
+        if (this.sessionTimeoutInterval) {
+            clearInterval(this.sessionTimeoutInterval);
         }
         
-        this.sessionTimeout = setTimeout(() => {
-            if (this.currentUser) {
-                this.showNotification('Sesja wygasła. Zaloguj się ponownie.', 'warning');
-                this.logout();
+        // Check session validity every minute
+        this.sessionTimeoutInterval = setInterval(() => {
+            this.checkSessionValidity();
+        }, 60 * 1000); // Every minute
+    }
+    
+    checkSessionValidity() {
+        if (!this.currentUser || !this.currentUser.sessionExpiry) return;
+        
+        const now = new Date();
+        const expiry = new Date(this.currentUser.sessionExpiry);
+        
+        if (this.currentUser.sessionExpiry !== 'forever' && now > expiry) {
+            this.showNotification('Sesja wygasła. Zaloguj się ponownie.', 'warning');
+            this.logout(false);
+        } else {
+            // Update session time display
+            const sessionTimeElement = document.getElementById('accountSessionTime');
+            if (sessionTimeElement) {
+                sessionTimeElement.textContent = this.getSessionTimeString(this.currentUser.sessionExpiry);
             }
-        }, 30 * 60 * 1000); // 30 minutes
+        }
+    }
+    
+    calculateSessionExpiry(rememberDuration) {
+        if (rememberDuration === 'forever') {
+            return 'forever';
+        }
+        
+        const now = new Date();
+        const durations = {
+            '24h': 24 * 60 * 60 * 1000,
+            '7d': 7 * 24 * 60 * 60 * 1000,
+            '30d': 30 * 24 * 60 * 60 * 1000
+        };
+        
+        const duration = durations[rememberDuration] || durations['24h'];
+        return new Date(now.getTime() + duration).toISOString();
+    }
+    
+    getSessionTimeString(sessionExpiry) {
+        if (sessionExpiry === 'forever') {
+            return 'Bez limitu';
+        }
+        
+        const expiry = new Date(sessionExpiry);
+        const now = new Date();
+        const diff = expiry - now;
+        
+        if (diff <= 0) {
+            return 'Wygasła';
+        }
+        
+        const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+        const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+        const minutes = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+        
+        if (days > 0) {
+            return `${days} dni, ${hours} godz.`;
+        } else if (hours > 0) {
+            return `${hours} godz., ${minutes} min.`;
+        } else {
+            return `${minutes} min.`;
+        }
     }
     
     sanitizeInput(input) {
@@ -101,6 +460,447 @@ class TimerHub {
         }
     }
     
+    // Auth UI Methods
+    showLogin(event) {
+        if (event) event.preventDefault();
+        document.getElementById('loginForm').style.display = 'block';
+        document.getElementById('registerForm').style.display = 'none';
+        document.getElementById('forgotPasswordForm').style.display = 'none';
+        document.getElementById('authTitle').textContent = 'Zaloguj się przy pomocy konta Cobra';
+        document.getElementById('authSwitchText').innerHTML = 'Nie masz konta? <a href="#" onclick="window.app.showRegister(event)">Zarejestruj się</a>';
+    }
+    
+    showRegister(event) {
+        if (event) event.preventDefault();
+        document.getElementById('loginForm').style.display = 'none';
+        document.getElementById('registerForm').style.display = 'block';
+        document.getElementById('forgotPasswordForm').style.display = 'none';
+        document.getElementById('authTitle').textContent = 'Utwórz konto Cobra';
+        document.getElementById('authSwitchText').innerHTML = 'Masz już konto? <a href="#" onclick="window.app.showLogin(event)">Zaloguj się</a>';
+    }
+    
+    showForgotPassword(event) {
+        if (event) event.preventDefault();
+        document.getElementById('loginForm').style.display = 'none';
+        document.getElementById('registerForm').style.display = 'none';
+        document.getElementById('forgotPasswordForm').style.display = 'block';
+        document.getElementById('authTitle').textContent = 'Resetowanie hasła';
+        document.getElementById('authSwitchText').innerHTML = '';
+    }
+    
+    // Login Handler
+    async handleLogin(event) {
+        if (event) event.preventDefault();
+        
+        const nick = document.getElementById('loginNick').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        const rememberMe = document.getElementById('loginRemember').value;
+        const submitBtn = document.getElementById('loginSubmitBtn');
+        
+        if (!this.isFirebaseReady) {
+            this.showNotification('System nie jest jeszcze gotowy. Spróbuj ponownie.', 'error');
+            return;
+        }
+        
+        // Validate inputs
+        if (!nick || nick.length < 3) {
+            this.showNotification('Nick musi mieć minimum 3 znaki', 'error');
+            return;
+        }
+        
+        if (!password || password.length < 6) {
+            this.showNotification('Hasło musi mieć minimum 6 znaków', 'error');
+            return;
+        }
+        
+        // Disable submit button and show loading
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logowanie...';
+        
+        try {
+            // Create email from nick (nick@cobra.auth)
+            const email = `${nick.toLowerCase()}@cobra.auth`;
+            
+            console.log('Attempting login with email:', email);
+            
+            // Sign in with Firebase
+            const userCredential = await window.firebase.signInWithEmailAndPassword(
+                window.firebase.auth, 
+                email, 
+                password
+            );
+            
+            console.log('Login successful:', userCredential.user.uid);
+            
+            this.firebaseUser = userCredential.user;
+            
+            // Load user profile from database
+            const userRef = window.firebase.ref(window.firebase.database, `users/${this.firebaseUser.uid}/profile`);
+            const snapshot = await window.firebase.get(userRef);
+            
+            if (snapshot.exists()) {
+                const profile = snapshot.val();
+                const sessionExpiry = this.calculateSessionExpiry(rememberMe);
+                
+                this.currentUser = {
+                    uid: this.firebaseUser.uid,
+                    nick: profile.nick,
+                    birthdate: profile.birthdate,
+                    createdAt: profile.createdAt,
+                    email: email,
+                    picture: profile.picture || `https://ui-avatars.com/api/?name=${profile.nick}&background=6366f1&color=fff`,
+                    sessionExpiry: sessionExpiry
+                };
+                
+                // Save to localStorage
+                localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+                
+                // Setup user after authentication
+                await this.setupUserAfterAuth();
+                
+                // Show app
+                this.showApp();
+                this.showNotification(`Witaj ponownie, ${profile.nick}!`, 'success');
+            } else {
+                throw new Error('Profile not found');
+            }
+            
+        } catch (error) {
+            console.error('Login error:', error);
+            
+            if (error.code === 'auth/user-not-found') {
+                this.showNotification('Nie znaleziono użytkownika o takim nicku', 'error');
+            } else if (error.code === 'auth/wrong-password') {
+                this.showNotification('Nieprawidłowe hasło', 'error');
+            } else if (error.code === 'auth/invalid-email') {
+                this.showNotification('Nieprawidłowy nick', 'error');
+            } else if (error.code === 'auth/too-many-requests') {
+                this.showNotification('Zbyt wiele prób logowania. Spróbuj ponownie później.', 'error');
+            } else {
+                this.showNotification('Błąd logowania. Spróbuj ponownie.', 'error');
+            }
+        } finally {
+            // Re-enable submit button
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Zaloguj się';
+        }
+    }
+    
+    // Register Handler
+    async handleRegister(event) {
+        if (event) event.preventDefault();
+        
+        const nick = document.getElementById('registerNick').value.trim();
+        const birthdate = document.getElementById('registerBirthdate').value;
+        const password = document.getElementById('registerPassword').value;
+        const passwordConfirm = document.getElementById('registerPasswordConfirm').value;
+        const acceptTerms = document.getElementById('acceptTerms').checked;
+        const submitBtn = document.getElementById('registerSubmitBtn');
+        
+        // Validation
+        if (!nick || nick.length < 3) {
+            this.showNotification('Nick musi mieć minimum 3 znaki', 'error');
+            return;
+        }
+        
+        if (password !== passwordConfirm) {
+            this.showNotification('Hasła nie są identyczne', 'error');
+            return;
+        }
+        
+        if (password.length < 6) {
+            this.showNotification('Hasło musi mieć minimum 6 znaków', 'error');
+            return;
+        }
+        
+        if (!acceptTerms) {
+            this.showNotification('Musisz zaakceptować regulamin', 'error');
+            return;
+        }
+        
+        // Check age
+        const birthdateObj = new Date(birthdate);
+        const age = Math.floor((new Date() - birthdateObj) / (365.25 * 24 * 60 * 60 * 1000));
+        if (age < 13) {
+            this.showNotification('Musisz mieć minimum 13 lat', 'error');
+            return;
+        }
+        
+        if (!this.isFirebaseReady) {
+            this.showNotification('System nie jest jeszcze gotowy. Spróbuj ponownie.', 'error');
+            return;
+        }
+        
+        // Disable submit button and show loading
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Tworzenie konta...';
+        
+        try {
+            // Check if nick is already taken
+            const usersRef = window.firebase.ref(window.firebase.database, 'users');
+            const usersSnapshot = await window.firebase.get(usersRef);
+            
+            let nickTaken = false;
+            if (usersSnapshot.exists()) {
+                usersSnapshot.forEach((userSnapshot) => {
+                    const userData = userSnapshot.val();
+                    if (userData.profile && userData.profile.nick.toLowerCase() === nick.toLowerCase()) {
+                        nickTaken = true;
+                    }
+                });
+            }
+            
+            if (nickTaken) {
+                this.showNotification('Ten nick jest już zajęty', 'error');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-user-plus"></i> Utwórz konto';
+                return;
+            }
+            
+            // Create email from nick
+            const email = `${nick.toLowerCase()}@cobra.auth`;
+            
+            console.log('Creating account with email:', email);
+            
+            // Create user with Firebase
+            const userCredential = await window.firebase.createUserWithEmailAndPassword(
+                window.firebase.auth, 
+                email, 
+                password
+            );
+            
+            console.log('Account created:', userCredential.user.uid);
+            
+            this.firebaseUser = userCredential.user;
+            
+            // Create user profile
+            const profile = {
+                nick: nick,
+                birthdate: birthdate,
+                createdAt: new Date().toISOString(),
+                picture: `https://ui-avatars.com/api/?name=${nick}&background=6366f1&color=fff`,
+                lastActive: window.firebase.serverTimestamp()
+            };
+            
+            // Save profile to database
+            const userRef = window.firebase.ref(window.firebase.database, `users/${this.firebaseUser.uid}/profile`);
+            await window.firebase.set(userRef, profile);
+            
+            // Set current user with default session (24h)
+            this.currentUser = {
+                uid: this.firebaseUser.uid,
+                nick: nick,
+                birthdate: birthdate,
+                createdAt: profile.createdAt,
+                email: email,
+                picture: profile.picture,
+                sessionExpiry: this.calculateSessionExpiry('24h')
+            };
+            
+            // Save to localStorage
+            localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+            
+            // Clear form data
+            localStorage.removeItem('formData_registerNick');
+            localStorage.removeItem('formData_registerBirthdate');
+            
+            // Setup user after authentication
+            await this.setupUserAfterAuth();
+            
+            // Show app
+            this.showApp();
+            this.showNotification(`Witaj w Timer Hub, ${nick}!`, 'success');
+            
+        } catch (error) {
+            console.error('Registration error:', error);
+            
+            if (error.code === 'auth/email-already-in-use') {
+                this.showNotification('Ten nick jest już zajęty', 'error');
+            } else if (error.code === 'auth/weak-password') {
+                this.showNotification('Hasło jest za słabe. Użyj minimum 6 znaków.', 'error');
+            } else if (error.code === 'auth/invalid-email') {
+                this.showNotification('Nieprawidłowy format nicka', 'error');
+            } else {
+                this.showNotification('Błąd rejestracji. Spróbuj ponownie.', 'error');
+            }
+        } finally {
+            // Re-enable submit button
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-user-plus"></i> Utwórz konto';
+        }
+    }
+    
+    // Forgot Password Handler
+    async handleForgotPassword(event) {
+        if (event) event.preventDefault();
+        
+        const nick = document.getElementById('forgotNick').value.trim();
+        
+        if (!this.isFirebaseReady) {
+            this.showNotification('System nie jest jeszcze gotowy. Spróbuj ponownie.', 'error');
+            return;
+        }
+        
+        try {
+            // Since we're using fake emails, we can't really send reset emails
+            // This is just for demonstration
+            this.showNotification('Funkcja resetowania hasła jest w fazie testowej', 'info');
+            
+            // In a real app, you would implement a custom password reset flow
+            // For now, just log the request
+            console.log(`Password reset requested for nick: ${nick}`);
+            
+            // Show success message
+            setTimeout(() => {
+                this.showNotification('Instrukcje resetowania hasła zostały zapisane w konsoli', 'success');
+                this.showLogin();
+            }, 2000);
+            
+        } catch (error) {
+            console.error('Reset password error:', error);
+            this.showNotification('Błąd resetowania hasła', 'error');
+        }
+    }
+    
+    // Change Password (for logged in users)
+    async changePassword() {
+        const newPassword = prompt('Podaj nowe hasło (minimum 6 znaków):');
+        if (!newPassword || newPassword.length < 6) {
+            this.showNotification('Hasło musi mieć minimum 6 znaków', 'error');
+            return;
+        }
+        
+        const confirmPassword = prompt('Potwierdź nowe hasło:');
+        if (newPassword !== confirmPassword) {
+            this.showNotification('Hasła nie są identyczne', 'error');
+            return;
+        }
+        
+        try {
+            await window.firebase.updatePassword(this.firebaseUser, newPassword);
+            this.showNotification('Hasło zostało zmienione', 'success');
+        } catch (error) {
+            console.error('Change password error:', error);
+            if (error.code === 'auth/requires-recent-login') {
+                this.showNotification('Musisz się ponownie zalogować aby zmienić hasło', 'error');
+            } else {
+                this.showNotification('Błąd zmiany hasła', 'error');
+            }
+        }
+    }
+    
+    async setupUserAfterAuth() {
+        if (!this.firebaseUser || !this.isFirebaseReady) return;
+        
+        try {
+            await this.setupUserPresence();
+            await this.syncUserData();
+            this.listenToChat();
+            this.listenToMessageReads();
+            this.listenToOnlineUsers();
+            this.listenToPrivateMessages();
+            await this.loadAllUsersFromFirebase();
+            this.updateOnlineUsers();
+            this.loadLastReadMessage();
+        } catch (error) {
+            console.error('Error setting up user after auth:', error);
+        }
+    }
+    
+    async showApp() {
+        console.log('Showing app...');
+        
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('loadingScreen').style.display = 'flex';
+        
+        // Update loading status
+        const loadingStatus = document.getElementById('loadingStatus');
+        if (loadingStatus) {
+            loadingStatus.textContent = 'Ładowanie aplikacji...';
+        }
+        
+        // Small delay to ensure DOM is ready
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        document.querySelector('.container').style.display = 'block';
+        
+        // Set user data in UI
+        document.getElementById('userName').textContent = this.currentUser.nick;
+        document.getElementById('userAvatar').src = this.currentUser.picture;
+        document.getElementById('welcomeName').textContent = this.currentUser.nick;
+        
+        // Set account info in settings
+        document.getElementById('accountNick').textContent = this.currentUser.nick;
+        document.getElementById('accountBirthdate').textContent = new Date(this.currentUser.birthdate).toLocaleDateString(this.settings.region);
+        document.getElementById('accountCreated').textContent = new Date(this.currentUser.createdAt).toLocaleDateString(this.settings.region);
+        document.getElementById('accountSessionTime').textContent = this.getSessionTimeString(this.currentUser.sessionExpiry);
+        
+        // Load custom avatar if exists
+        this.loadCustomAvatar();
+        
+        // Hide loading screen
+        setTimeout(() => {
+            document.getElementById('loadingScreen').style.display = 'none';
+        }, 1500);
+        
+        // Update current time
+        this.updateCurrentTime();
+        setInterval(() => this.updateCurrentTime(), 1000);
+        
+        // Update stats
+        this.updateStats();
+        
+        // Load theme
+        this.loadTheme();
+        
+        // Apply settings
+        this.applySettings();
+        
+        // Check for active timers
+        this.checkActiveTimers();
+        
+        // Load user data
+        this.loadUserDataFromLocalStorage();
+    }
+    
+    logout(showConfirm = true) {
+        if (!showConfirm || confirm('Czy na pewno chcesz się wylogować?')) {
+            // Stop timers
+            if (this.timerInterval) {
+                clearInterval(this.timerInterval);
+            }
+            
+            // Sign out from Firebase
+            if (this.firebaseUser && this.isFirebaseReady) {
+                window.firebase.signOut(window.firebase.auth).catch(error => {
+                    console.error('Firebase signout error:', error);
+                });
+            }
+            
+            // Clear presence
+            if (this.presenceRef && this.isFirebaseReady) {
+                window.firebase.set(this.presenceRef, {
+                    state: 'offline',
+                    last_changed: window.firebase.serverTimestamp()
+                }).catch(error => {
+                    console.error('Error setting offline presence:', error);
+                });
+            }
+            
+            // Clear local data
+            localStorage.removeItem('currentUser');
+            
+            // Clear session timeout
+            if (this.sessionTimeoutInterval) {
+                clearInterval(this.sessionTimeoutInterval);
+            }
+            
+            // Reload page
+            location.reload();
+        }
+    }
+    
+    // Settings methods
     loadSettings() {
         const savedSettings = localStorage.getItem('timerHubSettings');
         if (savedSettings) {
@@ -151,21 +951,36 @@ class TimerHub {
         }
         
         // Update UI elements
-        document.getElementById('enableNotifications').checked = this.settings.notifications;
-        document.getElementById('enableChatNotifications').checked = this.settings.chatNotifications;
-        document.getElementById('enableTimerNotifications').checked = this.settings.timerNotifications;
-        document.getElementById('enablePushNotifications').checked = this.settings.pushNotifications;
-        document.getElementById('regionSelect').value = this.settings.region;
-        document.getElementById('timeFormat').value = this.settings.timeFormat;
-        document.getElementById('deviceOptimization').value = this.settings.deviceOptimization;
-        document.getElementById('enableAnimations').checked = this.settings.animations;
-        document.getElementById('reducedMotion').checked = this.settings.reducedMotion;
-        document.getElementById('showOnlineStatus').checked = this.settings.showOnlineStatus;
-        document.getElementById('showReadReceipts').checked = this.settings.showReadReceipts;
-        document.getElementById('colorTheme').value = this.settings.colorTheme;
-        document.getElementById('fontSize').value = this.settings.fontSize;
-        document.getElementById('cardStyle').value = this.settings.cardStyle;
-        document.getElementById('enableCompactMode').checked = this.settings.compactMode;
+        const settingsElements = {
+            'enableNotifications': this.settings.notifications,
+            'enableChatNotifications': this.settings.chatNotifications,
+            'enableTimerNotifications': this.settings.timerNotifications,
+            'enablePushNotifications': this.settings.pushNotifications,
+            'showOnlineStatus': this.settings.showOnlineStatus,
+            'showReadReceipts': this.settings.showReadReceipts,
+            'enableAnimations': this.settings.animations,
+            'reducedMotion': this.settings.reducedMotion,
+            'enableCompactMode': this.settings.compactMode
+        };
+        
+        Object.entries(settingsElements).forEach(([id, value]) => {
+            const element = document.getElementById(id);
+            if (element) element.checked = value;
+        });
+        
+        const selectElements = {
+            'regionSelect': this.settings.region,
+            'timeFormat': this.settings.timeFormat,
+            'deviceOptimization': this.settings.deviceOptimization,
+            'colorTheme': this.settings.colorTheme,
+            'fontSize': this.settings.fontSize,
+            'cardStyle': this.settings.cardStyle
+        };
+        
+        Object.entries(selectElements).forEach(([id, value]) => {
+            const element = document.getElementById(id);
+            if (element) element.value = value;
+        });
     }
     
     // Avatar management
@@ -200,7 +1015,7 @@ class TimerHub {
         
         // Save custom avatar to localStorage
         if (this.currentUser) {
-            localStorage.setItem(`customAvatar_${this.currentUser.sub}`, this.customAvatar);
+            localStorage.setItem(`customAvatar_${this.currentUser.uid}`, this.customAvatar);
         }
         
         // Update avatar display
@@ -208,19 +1023,19 @@ class TimerHub {
         
         // Update Firebase profile if connected
         if (this.firebaseUser && this.isFirebaseReady) {
-            this.updateFirebaseUserProfile(this.currentUser);
+            this.updateFirebaseUserProfile();
         }
         
         this.closeAvatarModal();
         this.showNotification('Avatar zmieniony!', 'success');
     }
     
-    resetToGoogleAvatar() {
+    resetToDefaultAvatar() {
         this.customAvatar = null;
         
         // Remove custom avatar from localStorage
         if (this.currentUser) {
-            localStorage.removeItem(`customAvatar_${this.currentUser.sub}`);
+            localStorage.removeItem(`customAvatar_${this.currentUser.uid}`);
         }
         
         // Update avatar display
@@ -228,11 +1043,11 @@ class TimerHub {
         
         // Update Firebase profile if connected
         if (this.firebaseUser && this.isFirebaseReady) {
-            this.updateFirebaseUserProfile(this.currentUser);
+            this.updateFirebaseUserProfile();
         }
         
         this.closeAvatarModal();
-        this.showNotification('Przywrócono zdjęcie Google', 'success');
+        this.showNotification('Przywrócono domyślny avatar', 'success');
     }
     
     updateAvatarDisplay() {
@@ -263,12 +1078,31 @@ class TimerHub {
     
     loadCustomAvatar() {
         if (this.currentUser) {
-            const savedAvatar = localStorage.getItem(`customAvatar_${this.currentUser.sub}`);
+            const savedAvatar = localStorage.getItem(`customAvatar_${this.currentUser.uid}`);
             if (savedAvatar) {
                 this.customAvatar = savedAvatar;
                 this.updateAvatarDisplay();
             }
         }
+    }
+    
+    createAvatarDataUrl(emoji) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 100;
+        canvas.height = 100;
+        const ctx = canvas.getContext('2d');
+        
+        // Background
+        ctx.fillStyle = '#6366f1';
+        ctx.fillRect(0, 0, 100, 100);
+        
+        // Emoji
+        ctx.font = '60px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(emoji, 50, 50);
+        
+        return canvas.toDataURL();
     }
     
     changeColorTheme(theme) {
@@ -396,7 +1230,8 @@ class TimerHub {
             meetingsHistory: this.meetingsHistory,
             favoriteMeetings: this.favoriteMeetings,
             settings: this.settings,
-            exportDate: new Date().toISOString()
+            exportDate: new Date().toISOString(),
+            userNick: this.currentUser?.nick
         };
         
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -484,7 +1319,7 @@ class TimerHub {
                 
                 // Clear from storage
                 if (this.currentUser) {
-                    const userKey = this.currentUser.sub;
+                    const userKey = this.currentUser.uid;
                     localStorage.removeItem(`watchHistory_${userKey}`);
                     localStorage.removeItem(`favoriteChannels_${userKey}`);
                     localStorage.removeItem(`meetings_${userKey}`);
@@ -495,11 +1330,23 @@ class TimerHub {
                 // Clear from Firebase
                 if (this.firebaseUser && this.isFirebaseReady) {
                     const userId = this.firebaseUser.uid;
-                    const userRef = window.firebase.ref(window.firebase.database, `users/${userId}`);
-                    await window.firebase.remove(userRef);
+                    const userDataRef = window.firebase.ref(window.firebase.database, `users/${userId}`);
+                    const profileRef = window.firebase.ref(window.firebase.database, `users/${userId}/profile`);
+                    
+                    // Get profile data before clearing
+                    const profileSnapshot = await window.firebase.get(profileRef);
+                    const profileData = profileSnapshot.val();
+                    
+                    // Clear user data but keep profile
+                    await window.firebase.remove(userDataRef);
+                    
+                    // Restore profile
+                    if (profileData) {
+                        await window.firebase.set(profileRef, profileData);
+                    }
                 }
                 
-                // Reset settings
+                // Reset settings to default
                 this.settings = {
                     notifications: true,
                     chatNotifications: true,
@@ -534,151 +1381,26 @@ class TimerHub {
         }
     }
     
-    waitForFirebase() {
-        const checkFirebase = setInterval(() => {
-            if (window.firebase && window.firebase.auth) {
-                clearInterval(checkFirebase);
-                this.initializeFirebase();
-            }
-        }, 100);
-        
-        // Timeout after 5 seconds
-        setTimeout(() => {
-            clearInterval(checkFirebase);
-            if (!this.isFirebaseReady) {
-                console.error('Firebase failed to load');
-                this.init();
-            }
-        }, 5000);
-    }
-    
-    initializeFirebase() {
-        this.isFirebaseReady = true;
-        console.log('Firebase is ready');
-        
-        // Listen for auth state changes
-        window.firebase.onAuthStateChanged(window.firebase.auth, async (user) => {
-            if (user) {
-                console.log('Firebase user authenticated:', user.uid);
-                this.firebaseUser = user;
-                await this.setupUserPresence();
-                await this.syncUserData();
-                this.listenToChat();
-                this.listenToMessageReads();
-                this.listenToOnlineUsers();
-                this.listenToPrivateMessages();
-                this.loadAllUsersFromFirebase();
-                this.updateOnlineUsers();
-                this.loadLastReadMessage();
-            } else {
-                console.log('No Firebase user detected');
-            }
-        });
-        
-        // Initialize app
-        this.init();
-    }
-    
-    async createAnonymousUser() {
-        if (!this.isFirebaseReady) {
-            console.error('Firebase not ready');
-            return false;
-        }
-        
-        try {
-            console.log('Creating anonymous user...');
-            const userCredential = await window.firebase.signInAnonymously(window.firebase.auth);
-            this.firebaseUser = userCredential.user;
-            console.log('Anonymous user created:', this.firebaseUser.uid);
-            
-            // Update profile with Google data if available
-            if (this.currentUser) {
-                await this.updateFirebaseUserProfile(this.currentUser);
-            }
-            
-            // Setup presence and listeners
-            await this.setupUserPresence();
-            await this.syncUserData();
-            this.listenToChat();
-            this.listenToMessageReads();
-            this.listenToOnlineUsers();
-            this.listenToPrivateMessages();
-            this.loadAllUsersFromFirebase();
-            this.updateOnlineUsers();
-            this.loadLastReadMessage();
-            
-            return true;
-        } catch (error) {
-            console.error('Error creating anonymous user:', error);
-            return false;
-        }
-    }
-    
-    async updateFirebaseUserProfile(googleUser) {
-        if (!this.firebaseUser || !this.isFirebaseReady) return;
+    async updateFirebaseUserProfile() {
+        if (!this.firebaseUser || !this.isFirebaseReady || !this.currentUser) return;
         
         const userId = this.firebaseUser.uid;
         const profileRef = window.firebase.ref(window.firebase.database, `users/${userId}/profile`);
         
         try {
             const profileData = {
-                name: googleUser.name,
-                email: googleUser.email,
-                picture: this.customAvatar || googleUser.picture,
-                googleId: googleUser.sub,
-                lastActive: window.firebase.serverTimestamp(),
-                hasCustomAvatar: !!this.customAvatar
+                nick: this.currentUser.nick,
+                birthdate: this.currentUser.birthdate,
+                createdAt: this.currentUser.createdAt,
+                picture: this.customAvatar ? this.createAvatarDataUrl(this.customAvatar) : this.currentUser.picture,
+                hasCustomAvatar: !!this.customAvatar,
+                lastActive: window.firebase.serverTimestamp()
             };
             
             await window.firebase.set(profileRef, profileData);
         } catch (error) {
             console.error('Error updating Firebase profile:', error);
         }
-    }
-    
-    init() {
-        // Check pending login
-        const pendingLogin = localStorage.getItem('pendingGoogleLogin');
-        if (pendingLogin) {
-            try {
-                const data = JSON.parse(pendingLogin);
-                this.handleGoogleLogin(data.userInfo, data.credential);
-                localStorage.removeItem('pendingGoogleLogin');
-                return;
-            } catch (error) {
-                console.error('Error processing pending login:', error);
-                localStorage.removeItem('pendingGoogleLogin');
-            }
-        }
-        
-        // Check if user is logged in
-        const savedUser = localStorage.getItem('currentUser');
-        if (savedUser) {
-            try {
-                this.currentUser = JSON.parse(savedUser);
-                this.showApp();
-            } catch (error) {
-                console.error('Error parsing saved user:', error);
-                localStorage.removeItem('currentUser');
-                // Show login screen if error
-                document.getElementById('loginScreen').style.display = 'flex';
-                document.getElementById('loadingScreen').style.display = 'none';
-            }
-        } else {
-            // No user logged in - show login screen
-            document.getElementById('loginScreen').style.display = 'flex';
-            document.getElementById('loadingScreen').style.display = 'none';
-        }
-        
-        // Set today's date as default
-        const today = new Date().toISOString().split('T')[0];
-        const meetingDateEl = document.getElementById('meetingDate');
-        const videoDateEl = document.getElementById('videoDate');
-        if (meetingDateEl) meetingDateEl.value = today;
-        if (videoDateEl) videoDateEl.value = today;
-        
-        // Setup message context menu
-        this.setupMessageContextMenu();
     }
     
     setupMessageContextMenu() {
@@ -755,32 +1477,6 @@ class TimerHub {
         }
     }
     
-    async handleGoogleLogin(userInfo, credential) {
-        try {
-            this.currentUser = {
-                email: userInfo.email,
-                name: userInfo.name,
-                picture: userInfo.picture,
-                sub: userInfo.sub
-            };
-            
-            // Save user to localStorage
-            localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
-            
-            // Show app first
-            this.showApp();
-            
-            // Then handle Firebase authentication
-            if (this.isFirebaseReady && !this.firebaseUser) {
-                // Create anonymous user immediately after Google login
-                await this.createAnonymousUser();
-            }
-        } catch (error) {
-            console.error('Login error:', error);
-            alert('Błąd logowania. Spróbuj ponownie.');
-        }
-    }
-    
     async setupUserPresence() {
         if (!this.firebaseUser || !this.isFirebaseReady || !this.currentUser) return;
         
@@ -796,9 +1492,8 @@ class TimerHub {
             state: 'online',
             last_changed: window.firebase.serverTimestamp(),
             user_info: {
-                name: this.currentUser.name,
-                email: this.currentUser.email,
-                picture: this.customAvatar || this.currentUser.picture
+                nick: this.currentUser.nick,
+                picture: this.customAvatar ? this.createAvatarDataUrl(this.customAvatar) : this.currentUser.picture
             }
         };
         
@@ -829,9 +1524,8 @@ class TimerHub {
             state: status,
             last_changed: window.firebase.serverTimestamp(),
             user_info: {
-                name: this.currentUser.name,
-                email: this.currentUser.email,
-                picture: this.customAvatar || this.currentUser.picture
+                nick: this.currentUser.nick,
+                picture: this.customAvatar ? this.createAvatarDataUrl(this.customAvatar) : this.currentUser.picture
             }
         });
     }
@@ -872,7 +1566,7 @@ class TimerHub {
     
     loadUserDataFromLocalStorage() {
         if (!this.currentUser) return;
-        const userKey = this.currentUser.sub;
+        const userKey = this.currentUser.uid;
         this.watchHistory = this.loadFromStorage(`watchHistory_${userKey}`) || [];
         this.favoriteChannels = this.loadFromStorage(`favoriteChannels_${userKey}`) || {};
         this.meetings = this.loadFromStorage(`meetings_${userKey}`) || [];
@@ -888,9 +1582,10 @@ class TimerHub {
         
         const userData = {
             profile: {
-                name: this.currentUser.name,
-                email: this.currentUser.email,
-                picture: this.customAvatar || this.currentUser.picture,
+                nick: this.currentUser.nick,
+                birthdate: this.currentUser.birthdate,
+                createdAt: this.currentUser.createdAt,
+                picture: this.customAvatar ? this.createAvatarDataUrl(this.customAvatar) : this.currentUser.picture,
                 lastActive: window.firebase.serverTimestamp()
             },
             watchHistory: this.watchHistory,
@@ -909,7 +1604,7 @@ class TimerHub {
     
     async saveUserData(key, data) {
         // Always save to localStorage
-        const userKey = this.currentUser.sub;
+        const userKey = this.currentUser.uid;
         this.saveToStorage(`${key}_${userKey}`, data);
         
         // Try to save to Firebase
@@ -1018,7 +1713,7 @@ class TimerHub {
             return {
                 ...user,
                 unreadCount,
-                name: user.userInfo.name || 'Użytkownik',
+                name: user.userInfo.nick || 'Użytkownik',
                 picture: user.userInfo.picture || 'https://ui-avatars.com/api/?name=User&background=6366f1&color=fff'
             };
         });
@@ -1166,8 +1861,8 @@ class TimerHub {
         
         const message = {
             senderId: this.firebaseUser.uid,
-            senderName: this.currentUser.name,
-            senderPicture: this.customAvatar || this.currentUser.picture,
+            senderName: this.currentUser.nick,
+            senderPicture: this.customAvatar ? this.createAvatarDataUrl(this.customAvatar) : this.currentUser.picture,
             content: this.escapeHtml(content),
             timestamp: Date.now(),
             read: false
@@ -1191,7 +1886,7 @@ class TimerHub {
             // Send notification to recipient if they're online
             if (this.shouldShowNotification('chat') && this.settings.pushNotifications) {
                 this.sendPushNotification(
-                    `Nowa wiadomość od ${this.currentUser.name}`,
+                    `Nowa wiadomość od ${this.currentUser.nick}`,
                     content.substring(0, 100)
                 );
             }
@@ -1282,7 +1977,7 @@ class TimerHub {
             const readRef = window.firebase.ref(window.firebase.database, `chat/reads/${messageId}/${this.firebaseUser.uid}`);
             await window.firebase.set(readRef, {
                 userId: this.firebaseUser.uid,
-                userName: this.currentUser.name,
+                userName: this.currentUser.nick,
                 readAt: window.firebase.serverTimestamp()
             });
         } catch (error) {
@@ -1526,48 +2221,33 @@ class TimerHub {
         
         if (!content || content.length > 500) return;
         
+        // Check if user is logged in and Firebase is ready
+        if (!this.firebaseUser || !this.isFirebaseReady) {
+            this.showNotification('Musisz być zalogowany aby wysyłać wiadomości', 'error');
+            return;
+        }
+        
         // Clear input immediately for better UX
         input.value = '';
         
-        // Ensure we have Firebase user
-        if (!this.firebaseUser && this.isFirebaseReady) {
-            console.log('No Firebase user, creating one...');
-            const success = await this.createAnonymousUser();
-            if (!success) {
-                this.showNotification('Błąd połączenia z czatem. Spróbuj ponownie.', 'error');
-                return;
-            }
-        }
-        
         // Create message object
         const message = {
-            userId: this.firebaseUser?.uid || 'anonymous_' + Date.now(),
-            userName: this.currentUser.name,
-            userPicture: this.customAvatar || this.currentUser.picture,
+            userId: this.firebaseUser.uid,
+            userName: this.currentUser.nick,
+            userPicture: this.customAvatar ? this.createAvatarDataUrl(this.customAvatar) : this.currentUser.picture,
             content: this.escapeHtml(content),
             timestamp: Date.now(),
             type: 'user'
         };
         
         try {
-            if (!this.firebaseUser) {
-                throw new Error('No Firebase user available');
-            }
-            
             // Send to Firebase
             const chatRef = window.firebase.ref(window.firebase.database, 'chat/messages');
             const result = await window.firebase.push(chatRef, message);
             console.log('Message sent successfully, key:', result.key);
         } catch (error) {
             console.error('Error sending message:', error);
-            
-            // Show message locally
-            this.chatMessages.push({
-                id: 'local_' + Date.now(),
-                ...message
-            });
-            this.displayChatMessages();
-            this.showNotification('Wiadomość wysłana lokalnie (brak połączenia z serwerem)', 'warning');
+            this.showNotification('Błąd wysyłania wiadomości', 'error');
         }
     }
     
@@ -1592,12 +2272,6 @@ class TimerHub {
                         this.markMessageAsRead(msg.id);
                     }
                 });
-            }
-            
-            // Ensure Firebase connection when opening chat
-            if (this.isFirebaseReady && !this.firebaseUser && this.currentUser) {
-                console.log('Chat opened, creating Firebase user...');
-                await this.createAnonymousUser();
             }
         }
     }
@@ -1631,105 +2305,6 @@ class TimerHub {
             });
         } catch (error) {
             console.error('Error updating online users:', error);
-        }
-    }
-    
-    escapeHtml(text) {
-        const map = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#039;'
-        };
-        return text.replace(/[&<>"']/g, m => map[m]);
-    }
-    
-    async showApp() {
-        document.getElementById('loginScreen').style.display = 'none';
-        document.getElementById('loadingScreen').style.display = 'flex';
-        
-        // Small delay to ensure DOM is ready
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        document.querySelector('.container').style.display = 'block';
-        
-        // Set user data in UI
-        document.getElementById('userName').textContent = this.currentUser.name;
-        document.getElementById('userAvatar').src = this.currentUser.picture;
-        document.getElementById('welcomeName').textContent = this.currentUser.name.split(' ')[0];
-        
-        // Load custom avatar if exists
-        this.loadCustomAvatar();
-        
-        // Hide loading screen
-        setTimeout(() => {
-            document.getElementById('loadingScreen').style.display = 'none';
-        }, 2500);
-        
-        // Update current time
-        this.updateCurrentTime();
-        setInterval(() => this.updateCurrentTime(), 1000);
-        
-        // Update stats
-        this.updateStats();
-        
-        // Load theme
-        this.loadTheme();
-        
-        // Apply settings
-        this.applySettings();
-        
-        // Check for active timers
-        this.checkActiveTimers();
-        
-        // Load user data
-        this.loadUserDataFromLocalStorage();
-        
-        // Ensure Firebase connection after app loads
-        if (this.isFirebaseReady && !this.firebaseUser) {
-            setTimeout(async () => {
-                console.log('App loaded, creating Firebase user...');
-                await this.createAnonymousUser();
-            }, 1000);
-        }
-    }
-    
-    logout() {
-        if (confirm('Czy na pewno chcesz się wylogować?')) {
-            // Stop timers
-            if (this.timerInterval) {
-                clearInterval(this.timerInterval);
-            }
-            
-            // Sign out from Firebase
-            if (this.firebaseUser && this.isFirebaseReady) {
-                window.firebase.auth.signOut().catch(error => {
-                    console.error('Firebase signout error:', error);
-                });
-            }
-            
-            // Clear presence
-            if (this.presenceRef && this.isFirebaseReady) {
-                window.firebase.set(this.presenceRef, {
-                    state: 'offline',
-                    last_changed: window.firebase.serverTimestamp()
-                }).catch(error => {
-                    console.error('Error setting offline presence:', error);
-                });
-            }
-            
-            // Clear local data
-            localStorage.removeItem('currentUser');
-            localStorage.removeItem('pendingGoogleLogin');
-            
-            // Clear session timeout
-            if (this.sessionTimeout) {
-                clearTimeout(this.sessionTimeout);
-            }
-            
-            // Reload page
-            location.reload();
         }
     }
     
@@ -2656,10 +3231,13 @@ class TimerHub {
         const timeString = now.toLocaleTimeString(this.settings.region, timeOptions);
         const dateString = now.toLocaleDateString(this.settings.region, dateOptions);
         
-        document.getElementById('currentTime').innerHTML = `
-            ${timeString}<br>
-            <span style="font-size: 0.8em; opacity: 0.8;">${dateString}</span>
-        `;
+        const timeDisplay = document.getElementById('currentTime');
+        if (timeDisplay) {
+            timeDisplay.innerHTML = `
+                ${timeString}<br>
+                <span style="font-size: 0.8em; opacity: 0.8;">${dateString}</span>
+            `;
+        }
     }
     
     updateStats() {
@@ -2704,27 +3282,40 @@ class TimerHub {
         `;
         
         const container = document.getElementById('notifications');
-        container.appendChild(notification);
-        
-        // Animate in
-        setTimeout(() => notification.classList.add('show'), 10);
-        
-        // Remove after 5 seconds
-        setTimeout(() => {
-            notification.classList.remove('show');
-            setTimeout(() => notification.remove(), 300);
-        }, 5000);
+        if (container) {
+            container.appendChild(notification);
+            
+            // Animate in
+            setTimeout(() => notification.classList.add('show'), 10);
+            
+            // Remove after 5 seconds
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.remove(), 300);
+            }, 5000);
+        }
+    }
+    
+    escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, m => map[m]);
     }
 }
 
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    // Hide login screen by default
-    document.getElementById('loginScreen').style.display = 'none';
-    
-    // Create app instance
-    window.app = new TimerHub();
+    console.log('DOM loaded, initializing Timer Hub...');
 });
+
+// Create app instance
+console.log('Creating Timer Hub instance...');
+window.app = new TimerHub();
 
 // Prevent closing tab with active timer
 window.addEventListener('beforeunload', (e) => {
@@ -2734,9 +3325,45 @@ window.addEventListener('beforeunload', (e) => {
     }
 });
 
-// Service Worker for offline functionality
+// Service Worker for offline functionality and PWA
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(error => {
-        console.log('Service Worker registration failed:', error);
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then(registration => {
+            console.log('ServiceWorker registration successful:', registration.scope);
+        }).catch(error => {
+            console.log('ServiceWorker registration failed:', error);
+        });
     });
 }
+
+// Handle online/offline status
+window.addEventListener('online', () => {
+    if (window.app) {
+        window.app.showNotification('Połączenie internetowe przywrócone', 'success');
+        // Try to sync data
+        if (window.app.firebaseUser) {
+            window.app.syncUserData();
+        }
+    }
+});
+
+window.addEventListener('offline', () => {
+    if (window.app) {
+        window.app.showNotification('Brak połączenia internetowego', 'warning');
+    }
+});
+
+// Handle visibility change (tab switching)
+document.addEventListener('visibilitychange', () => {
+    if (window.app && window.app.currentTimer && !document.hidden) {
+        // Update timer display when tab becomes visible
+        window.app.updateTimer();
+    }
+});
+
+// Console easter egg
+console.log('%cTimer Hub', 'font-size: 24px; font-weight: bold; color: #6366f1;');
+console.log('%cBy Piotr20111 | Version 1.0.0', 'font-size: 12px; color: #8b5cf6;');
+console.log('%c⚠️ Uwaga!', 'font-size: 16px; font-weight: bold; color: #ef4444;');
+console.log('%cWklejanie tutaj kodu może narazić Twoje konto na przejęcie przez osoby trzecie.', 'font-size: 14px; color: #f59e0b;');
+

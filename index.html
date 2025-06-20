@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="google-signin-client_id" content="630173406824-ada5j713qsm99do8e98fvbiiq61j59dj.apps.googleusercontent.com">
     <title>Timer Hub - Zarządzanie czasem spotkań i filmów</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -11,35 +10,206 @@
 </head>
 <body>
     <!-- Login Screen -->
-    <div id="loginScreen" class="login-screen" style="display: none;">
+    <div id="loginScreen" class="login-screen">
         <div class="login-container">
             <div class="login-header">
                 <i class="fas fa-clock"></i>
                 <h1>Timer Hub</h1>
-                <p>Zaloguj się aby kontynuować</p>
+                <p id="authTitle">Zaloguj się przy pomocy konta Cobra</p>
             </div>
             
-            <div id="googleSignInButton" style="display: flex; justify-content: center; margin: 2rem 0;">
-                <!-- Google button will be rendered here -->
-            </div>
+            <!-- Login Form -->
+            <form id="loginForm" class="auth-form">
+                <div class="form-group">
+                    <label for="loginNick">
+                        <i class="fas fa-user"></i> Nick
+                    </label>
+                    <input 
+                        type="text" 
+                        id="loginNick" 
+                        placeholder="Twój nick" 
+                        required 
+                        minlength="3" 
+                        maxlength="20" 
+                        pattern="[a-zA-Z0-9_-]+"
+                        autocomplete="username"
+                    >
+                    <small class="form-hint">Tylko litery, cyfry, - i _</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="loginPassword">
+                        <i class="fas fa-lock"></i> Hasło
+                    </label>
+                    <div class="password-input-wrapper">
+                        <input 
+                            type="password" 
+                            id="loginPassword" 
+                            placeholder="Twoje hasło" 
+                            required 
+                            minlength="6"
+                            autocomplete="current-password"
+                        >
+                        <button type="button" class="password-toggle" onclick="window.app.togglePasswordVisibility('loginPassword')" tabindex="-1">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    <small class="form-hint">Minimum 6 znaków</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="loginRemember">Zapamiętaj mnie</label>
+                    <select id="loginRemember" class="remember-select">
+                        <option value="24h">Na 24 godziny</option>
+                        <option value="7d">Na 7 dni</option>
+                        <option value="30d">Na 30 dni</option>
+                        <option value="forever" selected>Na zawsze</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="submit-button" id="loginSubmitBtn">
+                    <i class="fas fa-sign-in-alt"></i> Zaloguj się
+                </button>
+                
+                <div class="auth-links">
+                    <a href="#" onclick="window.app.showForgotPassword(event)">Zapomniałeś hasła?</a>
+                </div>
+            </form>
             
+            <!-- Register Form (initially hidden) -->
+            <form id="registerForm" class="auth-form" style="display: none;">
+                <div class="form-group">
+                    <label for="registerNick">
+                        <i class="fas fa-user"></i> Nick
+                    </label>
+                    <input 
+                        type="text" 
+                        id="registerNick" 
+                        placeholder="Wybierz nick" 
+                        required 
+                        minlength="3" 
+                        maxlength="20" 
+                        pattern="[a-zA-Z0-9_-]+"
+                        autocomplete="username"
+                        onblur="window.app.checkNickAvailability()"
+                    >
+                    <small class="form-hint">3-20 znaków, tylko litery, cyfry, - i _</small>
+                    <small id="nickAvailability" class="nick-status"></small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="registerBirthdate">
+                        <i class="fas fa-calendar"></i> Data urodzenia
+                    </label>
+                    <input 
+                        type="date" 
+                        id="registerBirthdate" 
+                        required 
+                        max=""
+                    >
+                    <small class="form-hint">Musisz mieć minimum 13 lat</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="registerPassword">
+                        <i class="fas fa-lock"></i> Hasło
+                    </label>
+                    <div class="password-input-wrapper">
+                        <input 
+                            type="password" 
+                            id="registerPassword" 
+                            placeholder="Wymyśl hasło" 
+                            required 
+                            minlength="6"
+                            autocomplete="new-password"
+                        >
+                        <button type="button" class="password-toggle" onclick="window.app.togglePasswordVisibility('registerPassword')" tabindex="-1">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    <small class="form-hint">Minimum 6 znaków</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="registerPasswordConfirm">
+                        <i class="fas fa-lock"></i> Potwierdź hasło
+                    </label>
+                    <div class="password-input-wrapper">
+                        <input 
+                            type="password" 
+                            id="registerPasswordConfirm" 
+                            placeholder="Powtórz hasło" 
+                            required
+                            autocomplete="new-password"
+                        >
+                        <button type="button" class="password-toggle" onclick="window.app.togglePasswordVisibility('registerPasswordConfirm')" tabindex="-1">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="form-group checkbox-group">
+                    <label>
+                        <input type="checkbox" id="acceptTerms" required>
+                        <span>Akceptuję regulamin i politykę prywatności</span>
+                    </label>
+                </div>
+                
+                <button type="submit" class="submit-button" id="registerSubmitBtn">
+                    <i class="fas fa-user-plus"></i> Utwórz konto
+                </button>
+            </form>
+            
+            <!-- Forgot Password Form (initially hidden) -->
+            <form id="forgotPasswordForm" class="auth-form" style="display: none;">
+                <p class="reset-info">
+                    Podaj swój nick, a wyślemy Ci instrukcje resetowania hasła.
+                </p>
+                
+                <div class="form-group">
+                    <label for="forgotNick">
+                        <i class="fas fa-user"></i> Nick
+                    </label>
+                    <input 
+                        type="text" 
+                        id="forgotNick" 
+                        placeholder="Twój nick" 
+                        required
+                    >
+                </div>
+                
+                <button type="submit" class="submit-button">
+                    <i class="fas fa-paper-plane"></i> Wyślij
+                </button>
+                
+                <div class="auth-links">
+                    <a href="#" onclick="window.app.showLogin(event)">
+                        <i class="fas fa-arrow-left"></i> Powrót do logowania
+                    </a>
+                </div>
+            </form>
+            
+            <!-- Bottom links -->
             <div class="login-footer">
-                <p>Zarządzaj swoim czasem efektywnie</p>
-                <p style="font-size: 0.8rem; margin-top: 0.5rem; opacity: 0.7;">
-                    © 2025 Timer Hub by Piotr20111
+                <div id="authSwitchText" class="auth-switch">
+                    Nie masz konta? <a href="#" onclick="window.app.showRegister(event)">Zarejestruj się</a>
+                </div>
+                <p style="font-size: 0.8rem; margin-top: 1rem; opacity: 0.7;">
+                    © 2025 Timer Hub by Piotr20111 | Powered by Cobra Auth
                 </p>
             </div>
         </div>
     </div>
 
     <!-- Loading Screen -->
-    <div id="loadingScreen" class="loading-screen">
+    <div id="loadingScreen" class="loading-screen" style="display: none;">
         <div class="loader">
             <div class="loader-circle"></div>
             <div class="loader-circle"></div>
             <div class="loader-circle"></div>
         </div>
         <h2>Timer Hub</h2>
+        <p id="loadingStatus" style="color: var(--text-secondary); margin-top: 1rem;">Inicjalizacja...</p>
     </div>
 
     <!-- Avatar Selection Modal -->
@@ -115,8 +285,8 @@
                     </div>
                 </div>
                 <div class="avatar-actions">
-                    <button class="avatar-reset-btn" onclick="window.app.resetToGoogleAvatar()">
-                        <i class="fas fa-undo"></i> Przywróć zdjęcie Google
+                    <button class="avatar-reset-btn" onclick="window.app.resetToDefaultAvatar()">
+                        <i class="fas fa-undo"></i> Przywróć domyślny
                     </button>
                 </div>
             </div>
@@ -165,6 +335,32 @@
             </div>
             
             <div class="settings-content">
+                <!-- Account Settings -->
+                <div class="settings-section">
+                    <h4><i class="fas fa-user"></i> Konto Cobra</h4>
+                    <div class="settings-item">
+                        <label>Nick:</label>
+                        <strong id="accountNick"></strong>
+                    </div>
+                    <div class="settings-item">
+                        <label>Data urodzenia:</label>
+                        <span id="accountBirthdate"></span>
+                    </div>
+                    <div class="settings-item">
+                        <label>Dołączono:</label>
+                        <span id="accountCreated"></span>
+                    </div>
+                    <div class="settings-item">
+                        <label>Czas logowania:</label>
+                        <span id="accountSessionTime"></span>
+                    </div>
+                    <div class="settings-item">
+                        <button class="settings-button" onclick="window.app.changePassword()">
+                            <i class="fas fa-key"></i> Zmień hasło
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Notifications Settings -->
                 <div class="settings-section">
                     <h4><i class="fas fa-bell"></i> Powiadomienia</h4>
@@ -821,13 +1017,35 @@
         <div id="notifications" class="notifications"></div>
     </div>
 
-    <!-- Firebase -->
+    <!-- Firebase SDK v9 - Modular -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, signInWithCredential, GoogleAuthProvider, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getDatabase, ref, set, get, onValue, push, serverTimestamp, onDisconnect, remove, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { 
+            getAuth, 
+            createUserWithEmailAndPassword,
+            signInWithEmailAndPassword,
+            onAuthStateChanged,
+            signOut,
+            sendPasswordResetEmail,
+            updatePassword
+        } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { 
+            getDatabase, 
+            ref, 
+            set, 
+            get, 
+            onValue, 
+            push, 
+            serverTimestamp, 
+            onDisconnect, 
+            remove, 
+            query, 
+            orderByChild, 
+            limitToLast,
+            child 
+        } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-        // Your web app's Firebase configuration
+        // Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyA2vwaCsdHC56t6AOxst76PlxkQQrbJaF8",
             authDomain: "timer-hub-app-374ed.firebaseapp.com",
@@ -839,11 +1057,12 @@
         };
 
         // Initialize Firebase
+        console.log('Initializing Firebase...');
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const database = getDatabase(app);
 
-        // Expose Firebase to global scope
+        // Make Firebase functions available globally
         window.firebase = {
             app,
             auth,
@@ -856,129 +1075,24 @@
             serverTimestamp,
             onDisconnect,
             remove,
-            signInWithCredential,
-            GoogleAuthProvider,
-            onAuthStateChanged,
             query,
             orderByChild,
             limitToLast,
-            signInAnonymously  // This is the function, not auth.signInAnonymously
+            child,
+            createUserWithEmailAndPassword: (auth, email, password) => createUserWithEmailAndPassword(auth, email, password),
+            signInWithEmailAndPassword: (auth, email, password) => signInWithEmailAndPassword(auth, email, password),
+            onAuthStateChanged: (auth, callback) => onAuthStateChanged(auth, callback),
+            signOut: (auth) => signOut(auth),
+            sendPasswordResetEmail: (auth, email) => sendPasswordResetEmail(auth, email),
+            updatePassword: (user, password) => updatePassword(user, password)
         };
 
         console.log('Firebase initialized successfully');
+        
+        // Notify app that Firebase is ready
+        window.dispatchEvent(new Event('firebaseReady'));
     </script>
 
     <script src="script.js"></script>
-    
-    <!-- Google Sign-In Script -->
-    <script>
-        function loadGoogleSignIn() {
-            // Check if user is already logged in
-            const savedUser = localStorage.getItem('currentUser');
-            if (savedUser) {
-                // User is logged in, don't load Google Sign-In
-                return;
-            }
-            
-            const script = document.createElement('script');
-            script.src = 'https://accounts.google.com/gsi/client';
-            script.async = true;
-            script.defer = true;
-            script.onload = function() {
-                if (typeof google !== 'undefined' && google.accounts) {
-                    initializeGoogleSignIn();
-                }
-            };
-            script.onerror = function() {
-                console.error('Failed to load Google Sign-In');
-                showGoogleSignInError();
-            };
-            document.head.appendChild(script);
-        }
-        
-        function initializeGoogleSignIn() {
-            try {
-                google.accounts.id.initialize({
-                    client_id: "630173406824-ada5j713qsm99do8e98fvbiiq61j59dj.apps.googleusercontent.com",
-                    callback: handleCredentialResponse,
-                    auto_select: false,
-                    cancel_on_tap_outside: true,
-                    ux_mode: 'popup',
-                    context: 'signin',
-                    itp_support: true
-                });
-                
-                google.accounts.id.renderButton(
-                    document.getElementById("googleSignInButton"),
-                    { 
-                        theme: "filled_blue",
-                        size: "large",
-                        width: 300,
-                        text: "signin_with",
-                        shape: "rectangular",
-                        logo_alignment: "left",
-                        locale: "pl"
-                    }
-                );
-            } catch (error) {
-                console.error('Error initializing Google Sign-In:', error);
-                showGoogleSignInError();
-            }
-        }
-        
-        function handleCredentialResponse(response) {
-            try {
-                const responsePayload = decodeJwtResponse(response.credential);
-                console.log('User logged in:', responsePayload.email);
-                
-                if (window.app) {
-                    window.app.handleGoogleLogin(responsePayload, response.credential);
-                } else {
-                    // Save for later processing
-                    localStorage.setItem('pendingGoogleLogin', JSON.stringify({
-                        userInfo: responsePayload,
-                        credential: response.credential
-                    }));
-                    location.reload();
-                }
-            } catch (error) {
-                console.error('Error handling login:', error);
-                alert('Błąd logowania. Spróbuj ponownie.');
-            }
-        }
-        
-        function decodeJwtResponse(token) {
-            const base64Url = token.split('.')[1];
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-            }).join(''));
-            return JSON.parse(jsonPayload);
-        }
-        
-        function showGoogleSignInError() {
-            const buttonContainer = document.getElementById("googleSignInButton");
-            if (buttonContainer) {
-                buttonContainer.innerHTML = `
-                    <div style="text-align: center;">
-                        <p style="color: #f59e0b; margin-bottom: 15px;">
-                            <i class="fas fa-exclamation-triangle"></i> 
-                            Problem z Google Sign-In
-                        </p>
-                        <p style="color: var(--text-secondary); font-size: 0.9rem;">
-                            Odśwież stronę i spróbuj ponownie
-                        </p>
-                    </div>
-                `;
-            }
-        }
-        
-        // Start loading
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', loadGoogleSignIn);
-        } else {
-            loadGoogleSignIn();
-        }
-    </script>
 </body>
 </html>
