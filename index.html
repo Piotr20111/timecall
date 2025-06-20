@@ -41,18 +41,33 @@
                     <label for="loginPassword">
                         <i class="fas fa-lock"></i> Hasło
                     </label>
-                    <input 
-                        type="password" 
-                        id="loginPassword" 
-                        placeholder="Twoje hasło" 
-                        required 
-                        minlength="6"
-                        autocomplete="current-password"
-                    >
+                    <div class="password-input-wrapper">
+                        <input 
+                            type="password" 
+                            id="loginPassword" 
+                            placeholder="Twoje hasło" 
+                            required 
+                            minlength="6"
+                            autocomplete="current-password"
+                        >
+                        <button type="button" class="password-toggle" onclick="window.app.togglePasswordVisibility('loginPassword')" tabindex="-1">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
                     <small class="form-hint">Minimum 6 znaków</small>
                 </div>
                 
-                <button type="submit" class="submit-button">
+                <div class="form-group">
+                    <label for="loginRemember">Zapamiętaj mnie</label>
+                    <select id="loginRemember" class="remember-select">
+                        <option value="24h">Na 24 godziny</option>
+                        <option value="7d">Na 7 dni</option>
+                        <option value="30d">Na 30 dni</option>
+                        <option value="forever" selected>Na zawsze</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="submit-button" id="loginSubmitBtn">
                     <i class="fas fa-sign-in-alt"></i> Zaloguj się
                 </button>
                 
@@ -76,8 +91,10 @@
                         maxlength="20" 
                         pattern="[a-zA-Z0-9_-]+"
                         autocomplete="username"
+                        onblur="window.app.checkNickAvailability()"
                     >
                     <small class="form-hint">3-20 znaków, tylko litery, cyfry, - i _</small>
+                    <small id="nickAvailability" class="nick-status"></small>
                 </div>
                 
                 <div class="form-group">
@@ -97,14 +114,19 @@
                     <label for="registerPassword">
                         <i class="fas fa-lock"></i> Hasło
                     </label>
-                    <input 
-                        type="password" 
-                        id="registerPassword" 
-                        placeholder="Wymyśl hasło" 
-                        required 
-                        minlength="6"
-                        autocomplete="new-password"
-                    >
+                    <div class="password-input-wrapper">
+                        <input 
+                            type="password" 
+                            id="registerPassword" 
+                            placeholder="Wymyśl hasło" 
+                            required 
+                            minlength="6"
+                            autocomplete="new-password"
+                        >
+                        <button type="button" class="password-toggle" onclick="window.app.togglePasswordVisibility('registerPassword')" tabindex="-1">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
                     <small class="form-hint">Minimum 6 znaków</small>
                 </div>
                 
@@ -112,13 +134,18 @@
                     <label for="registerPasswordConfirm">
                         <i class="fas fa-lock"></i> Potwierdź hasło
                     </label>
-                    <input 
-                        type="password" 
-                        id="registerPasswordConfirm" 
-                        placeholder="Powtórz hasło" 
-                        required
-                        autocomplete="new-password"
-                    >
+                    <div class="password-input-wrapper">
+                        <input 
+                            type="password" 
+                            id="registerPasswordConfirm" 
+                            placeholder="Powtórz hasło" 
+                            required
+                            autocomplete="new-password"
+                        >
+                        <button type="button" class="password-toggle" onclick="window.app.togglePasswordVisibility('registerPasswordConfirm')" tabindex="-1">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="form-group checkbox-group">
@@ -128,7 +155,7 @@
                     </label>
                 </div>
                 
-                <button type="submit" class="submit-button">
+                <button type="submit" class="submit-button" id="registerSubmitBtn">
                     <i class="fas fa-user-plus"></i> Utwórz konto
                 </button>
             </form>
@@ -321,6 +348,10 @@
                     <div class="settings-item">
                         <label>Dołączono:</label>
                         <span id="accountCreated"></span>
+                    </div>
+                    <div class="settings-item">
+                        <label>Czas logowania:</label>
+                        <span id="accountSessionTime"></span>
                     </div>
                     <div class="settings-item">
                         <button class="settings-button" onclick="window.app.changePassword()">

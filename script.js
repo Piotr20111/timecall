@@ -26,6 +26,12 @@ class TimerHub {
         this.allUsers = {};
         this.processedUsers = new Set();
         this.customAvatar = null;
+        this.checkingNickAvailability = false;
+        this.nickAvailabilityTimeout = null;
+        this.formData = {
+            login: {},
+            register: {}
+        };
         
         // Settings
         this.settings = {
@@ -47,6 +53,9 @@ class TimerHub {
             compactMode: false
         };
         
+        // Clean up old Google auth data
+        this.cleanupOldAuthData();
+        
         // Security measures
         this.initSecurityMeasures();
         
@@ -63,6 +72,146 @@ class TimerHub {
         if (birthdateInput) {
             birthdateInput.max = maxBirthdate.toISOString().split('T')[0];
         }
+        
+        // Save form data on input
+        this.setupFormDataPersistence();
+    }
+    
+    // Clean up old authentication data
+    cleanupOldAuthData() {
+        // Remove any Google auth related data
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (key.includes('google') || key.includes('auth0') || key.includes('firebase:authUser'))) {
+                keysToRemove.push(key);
+            }
+        }
+        
+        keysToRemove.forEach(key => {
+            localStorage.removeItem(key);
+        });
+        
+        // Remove old user data format
+        if (localStorage.getItem('user')) {
+            localStorage.removeItem('user');
+        }
+    }
+    
+    // Setup form data persistence
+    setupFormDataPersistence() {
+        // Login form
+        ['loginNick', 'loginRemember'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                // Load saved value
+                const savedValue = localStorage.getItem(`formData_${id}`);
+                if (savedValue) {
+                    element.value = savedValue;
+                }
+                
+                // Save on change
+                element.addEventListener('input', () => {
+                    localStorage.setItem(`formData_${id}`, element.value);
+                });
+            }
+        });
+        
+        // Register form
+        ['registerNick', 'registerBirthdate'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                // Load saved value
+                const savedValue = localStorage.getItem(`formData_${id}`);
+                if (savedValue) {
+                    element.value = savedValue;
+                }
+                
+                // Save on change
+                element.addEventListener('input', () => {
+                    localStorage.setItem(`formData_${id}`, element.value);
+                });
+            }
+        });
+    }
+    
+    // Toggle password visibility
+    togglePasswordVisibility(inputId) {
+        const input = document.getElementById(inputId);
+        const button = input.nextElementSibling;
+        const icon = button.querySelector('i');
+        
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        } else {
+            input.type = 'password';
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        }
+    }
+    
+    // Check nick availability
+    async checkNickAvailability() {
+        const nickInput = document.getElementById('registerNick');
+        const nickStatus = document.getElementById('nickAvailability');
+        const nick = nickInput.value.trim();
+        
+        // Clear previous timeout
+        if (this.nickAvailabilityTimeout) {
+            clearTimeout(this.nickAvailabilityTimeout);
+        }
+        
+        // Reset status if nick is too short
+        if (nick.length < 3) {
+            nickStatus.textContent = '';
+            nickStatus.className = 'nick-status';
+            return;
+        }
+        
+        // Show checking status
+        nickStatus.textContent = 'Sprawdzanie dostępności...';
+        nickStatus.className = 'nick-status checking';
+        
+        // Debounce the check
+        this.nickAvailabilityTimeout = setTimeout(async () => {
+            if (!this.isFirebaseReady) {
+                nickStatus.textContent = 'Nie można sprawdzić dostępności';
+                nickStatus.className = 'nick-status';
+                return;
+            }
+            
+            try {
+                // Check if nick is already taken
+                const usersRef = window.firebase.ref(window.firebase.database, 'users');
+                const usersSnapshot = await window.firebase.get(usersRef);
+                
+                let nickTaken = false;
+                if (usersSnapshot.exists()) {
+                    usersSnapshot.forEach((userSnapshot) => {
+                        const userData = userSnapshot.val();
+                        if (userData.profile && userData.profile.nick.toLowerCase() === nick.toLowerCase()) {
+                            nickTaken = true;
+                        }
+                    });
+                }
+                
+                if (nickTaken) {
+                    nickStatus.textContent = '✗ Ten nick jest już zajęty';
+                    nickStatus.className = 'nick-status taken';
+                    nickInput.setCustomValidity('Ten nick jest już zajęty');
+                } else {
+                    nickStatus.textContent = '✓ Nick jest dostępny';
+                    nickStatus.className = 'nick-status available';
+                    nickInput.setCustomValidity('');
+                }
+            } catch (error) {
+                console.error('Error checking nick availability:', error);
+                nickStatus.textContent = 'Błąd sprawdzania dostępności';
+                nickStatus.className = 'nick-status';
+            }
+        }, 500); // 500ms debounce
     }
     
     // Security initialization
@@ -81,23 +230,79 @@ class TimerHub {
             }
         });
         
-        // Session timeout after 30 minutes of inactivity
-        this.resetSessionTimeout();
-        document.addEventListener('click', () => this.resetSessionTimeout());
-        document.addEventListener('keypress', () => this.resetSessionTimeout());
+        // Session timeout based on remember me setting
+        this.setupSessionTimeout();
     }
     
-    resetSessionTimeout() {
-        if (this.sessionTimeout) {
-            clearTimeout(this.sessionTimeout);
+    setupSessionTimeout() {
+        if (this.sessionTimeoutInterval) {
+            clearInterval(this.sessionTimeoutInterval);
         }
         
-        this.sessionTimeout = setTimeout(() => {
-            if (this.currentUser) {
-                this.showNotification('Sesja wygasła. Zaloguj się ponownie.', 'warning');
-                this.logout();
+        // Check session validity every minute
+        this.sessionTimeoutInterval = setInterval(() => {
+            this.checkSessionValidity();
+        }, 60 * 1000); // Every minute
+    }
+    
+    checkSessionValidity() {
+        if (!this.currentUser || !this.currentUser.sessionExpiry) return;
+        
+        const now = new Date();
+        const expiry = new Date(this.currentUser.sessionExpiry);
+        
+        if (this.currentUser.sessionExpiry !== 'forever' && now > expiry) {
+            this.showNotification('Sesja wygasła. Zaloguj się ponownie.', 'warning');
+            this.logout();
+        } else {
+            // Update session time display
+            const sessionTimeElement = document.getElementById('accountSessionTime');
+            if (sessionTimeElement) {
+                sessionTimeElement.textContent = this.getSessionTimeString(this.currentUser.sessionExpiry);
             }
-        }, 30 * 60 * 1000); // 30 minutes
+        }
+    }
+    
+    calculateSessionExpiry(rememberDuration) {
+        if (rememberDuration === 'forever') {
+            return 'forever';
+        }
+        
+        const now = new Date();
+        const durations = {
+            '24h': 24 * 60 * 60 * 1000,
+            '7d': 7 * 24 * 60 * 60 * 1000,
+            '30d': 30 * 24 * 60 * 60 * 1000
+        };
+        
+        const duration = durations[rememberDuration] || durations['24h'];
+        return new Date(now.getTime() + duration).toISOString();
+    }
+    
+    getSessionTimeString(sessionExpiry) {
+        if (sessionExpiry === 'forever') {
+            return 'Bez limitu';
+        }
+        
+        const expiry = new Date(sessionExpiry);
+        const now = new Date();
+        const diff = expiry - now;
+        
+        if (diff <= 0) {
+            return 'Wygasła';
+        }
+        
+        const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+        const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+        const minutes = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+        
+        if (days > 0) {
+            return `${days} dni, ${hours} godz.`;
+        } else if (hours > 0) {
+            return `${hours} godz., ${minutes} min.`;
+        } else {
+            return `${minutes} min.`;
+        }
     }
     
     sanitizeInput(input) {
@@ -143,16 +348,19 @@ class TimerHub {
         
         const nick = document.getElementById('loginNick').value.trim();
         const password = document.getElementById('loginPassword').value;
+        const rememberMe = document.getElementById('loginRemember').value;
+        const submitBtn = document.getElementById('loginSubmitBtn');
         
         if (!this.isFirebaseReady) {
             this.showNotification('System nie jest jeszcze gotowy. Spróbuj ponownie.', 'error');
             return;
         }
         
+        // Disable submit button and show loading
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logowanie...';
+        
         try {
-            // Show loading
-            this.showNotification('Logowanie...', 'info');
-            
             // Create email from nick (nick@cobra.auth)
             const email = `${nick.toLowerCase()}@cobra.auth`;
             
@@ -171,13 +379,16 @@ class TimerHub {
             
             if (snapshot.exists()) {
                 const profile = snapshot.val();
+                const sessionExpiry = this.calculateSessionExpiry(rememberMe);
+                
                 this.currentUser = {
                     uid: this.firebaseUser.uid,
                     nick: profile.nick,
                     birthdate: profile.birthdate,
                     createdAt: profile.createdAt,
                     email: email,
-                    picture: profile.picture || `https://ui-avatars.com/api/?name=${profile.nick}&background=6366f1&color=fff`
+                    picture: profile.picture || `https://ui-avatars.com/api/?name=${profile.nick}&background=6366f1&color=fff`,
+                    sessionExpiry: sessionExpiry
                 };
                 
                 // Save to localStorage
@@ -199,9 +410,15 @@ class TimerHub {
                 this.showNotification('Nieprawidłowe hasło', 'error');
             } else if (error.code === 'auth/invalid-email') {
                 this.showNotification('Nieprawidłowy nick', 'error');
+            } else if (error.code === 'auth/too-many-requests') {
+                this.showNotification('Zbyt wiele prób logowania. Spróbuj ponownie później.', 'error');
             } else {
                 this.showNotification('Błąd logowania. Spróbuj ponownie.', 'error');
             }
+        } finally {
+            // Re-enable submit button
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Zaloguj się';
         }
     }
     
@@ -214,6 +431,7 @@ class TimerHub {
         const password = document.getElementById('registerPassword').value;
         const passwordConfirm = document.getElementById('registerPasswordConfirm').value;
         const acceptTerms = document.getElementById('acceptTerms').checked;
+        const submitBtn = document.getElementById('registerSubmitBtn');
         
         // Validation
         if (password !== passwordConfirm) {
@@ -239,10 +457,11 @@ class TimerHub {
             return;
         }
         
+        // Disable submit button and show loading
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Tworzenie konta...';
+        
         try {
-            // Show loading
-            this.showNotification('Tworzenie konta...', 'info');
-            
             // Check if nick is already taken
             const usersRef = window.firebase.ref(window.firebase.database, 'users');
             const usersSnapshot = await window.firebase.get(usersRef);
@@ -287,18 +506,23 @@ class TimerHub {
             const userRef = window.firebase.ref(window.firebase.database, `users/${this.firebaseUser.uid}/profile`);
             await window.firebase.set(userRef, profile);
             
-            // Set current user
+            // Set current user with default session (24h)
             this.currentUser = {
                 uid: this.firebaseUser.uid,
                 nick: nick,
                 birthdate: birthdate,
                 createdAt: profile.createdAt,
                 email: email,
-                picture: profile.picture
+                picture: profile.picture,
+                sessionExpiry: this.calculateSessionExpiry('24h')
             };
             
             // Save to localStorage
             localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+            
+            // Clear form data
+            localStorage.removeItem('formData_registerNick');
+            localStorage.removeItem('formData_registerBirthdate');
             
             // Show app
             this.showApp();
@@ -311,9 +535,15 @@ class TimerHub {
                 this.showNotification('Ten nick jest już zajęty', 'error');
             } else if (error.code === 'auth/weak-password') {
                 this.showNotification('Hasło jest za słabe. Użyj minimum 6 znaków.', 'error');
+            } else if (error.code === 'auth/invalid-email') {
+                this.showNotification('Nieprawidłowy format nicka', 'error');
             } else {
                 this.showNotification('Błąd rejestracji. Spróbuj ponownie.', 'error');
             }
+        } finally {
+            // Re-enable submit button
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-user-plus"></i> Utwórz konto';
         }
     }
     
@@ -546,6 +776,25 @@ class TimerHub {
         }
     }
     
+    createAvatarDataUrl(emoji) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 100;
+        canvas.height = 100;
+        const ctx = canvas.getContext('2d');
+        
+        // Background
+        ctx.fillStyle = '#6366f1';
+        ctx.fillRect(0, 0, 100, 100);
+        
+        // Emoji
+        ctx.font = '60px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(emoji, 50, 50);
+        
+        return canvas.toDataURL();
+    }
+    
     changeColorTheme(theme) {
         this.settings.colorTheme = theme;
         this.saveSettings();
@@ -771,11 +1020,23 @@ class TimerHub {
                 // Clear from Firebase
                 if (this.firebaseUser && this.isFirebaseReady) {
                     const userId = this.firebaseUser.uid;
-                    const userRef = window.firebase.ref(window.firebase.database, `users/${userId}`);
-                    await window.firebase.remove(userRef);
+                    const userDataRef = window.firebase.ref(window.firebase.database, `users/${userId}`);
+                    const profileRef = window.firebase.ref(window.firebase.database, `users/${userId}/profile`);
+                    
+                    // Get profile data before clearing
+                    const profileSnapshot = await window.firebase.get(profileRef);
+                    const profileData = profileSnapshot.val();
+                    
+                    // Clear user data but keep profile
+                    await window.firebase.remove(userDataRef);
+                    
+                    // Restore profile
+                    if (profileData) {
+                        await window.firebase.set(profileRef, profileData);
+                    }
                 }
                 
-                // Reset settings
+                // Reset settings to default
                 this.settings = {
                     notifications: true,
                     chatNotifications: true,
@@ -886,31 +1147,28 @@ class TimerHub {
         }
     }
     
-    createAvatarDataUrl(emoji) {
-        const canvas = document.createElement('canvas');
-        canvas.width = 100;
-        canvas.height = 100;
-        const ctx = canvas.getContext('2d');
-        
-        // Background
-        ctx.fillStyle = '#6366f1';
-        ctx.fillRect(0, 0, 100, 100);
-        
-        // Emoji
-        ctx.font = '60px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(emoji, 50, 50);
-        
-        return canvas.toDataURL();
-    }
-    
     init() {
         // Check if user is logged in
         const savedUser = localStorage.getItem('currentUser');
         if (savedUser) {
             try {
                 this.currentUser = JSON.parse(savedUser);
+                
+                // Check session validity
+                if (this.currentUser.sessionExpiry) {
+                    const now = new Date();
+                    const expiry = new Date(this.currentUser.sessionExpiry);
+                    
+                    if (this.currentUser.sessionExpiry !== 'forever' && now > expiry) {
+                        // Session expired
+                        localStorage.removeItem('currentUser');
+                        this.currentUser = null;
+                        this.showNotification('Sesja wygasła. Zaloguj się ponownie.', 'warning');
+                        document.getElementById('loginScreen').style.display = 'flex';
+                        document.getElementById('loadingScreen').style.display = 'none';
+                        return;
+                    }
+                }
                 
                 // Auto-login with Firebase if we have credentials
                 if (this.isFirebaseReady && !this.firebaseUser) {
@@ -1877,6 +2135,7 @@ class TimerHub {
         document.getElementById('accountNick').textContent = this.currentUser.nick;
         document.getElementById('accountBirthdate').textContent = new Date(this.currentUser.birthdate).toLocaleDateString(this.settings.region);
         document.getElementById('accountCreated').textContent = new Date(this.currentUser.createdAt).toLocaleDateString(this.settings.region);
+        document.getElementById('accountSessionTime').textContent = this.getSessionTimeString(this.currentUser.sessionExpiry);
         
         // Load custom avatar if exists
         this.loadCustomAvatar();
@@ -1934,8 +2193,8 @@ class TimerHub {
             localStorage.removeItem('currentUser');
             
             // Clear session timeout
-            if (this.sessionTimeout) {
-                clearTimeout(this.sessionTimeout);
+            if (this.sessionTimeoutInterval) {
+                clearInterval(this.sessionTimeoutInterval);
             }
             
             // Reload page
