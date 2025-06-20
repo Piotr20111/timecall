@@ -185,128 +185,6 @@ body.desktop-optimized {
     font-size: 14px;
 }
 
-/* Password toggle styles */
-.password-input-wrapper {
-    position: relative;
-    display: flex;
-    align-items: center;
-}
-
-.password-input-wrapper input {
-    padding-right: 45px;
-}
-
-.password-toggle {
-    position: absolute;
-    right: 10px;
-    background: transparent;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 5px;
-    font-size: 1rem;
-    opacity: 0.7;
-    transition: opacity 0.3s ease;
-}
-
-.password-toggle:hover {
-    opacity: 1;
-}
-
-.password-toggle:focus {
-    outline: none;
-}
-
-/* Login form specific */
-.auth-form .password-toggle {
-    color: rgba(255, 255, 255, 0.7);
-}
-
-.auth-form .password-toggle:hover {
-    color: rgba(255, 255, 255, 1);
-}
-
-/* Nick availability status */
-.nick-status {
-    display: block;
-    margin-top: 0.25rem;
-    font-size: 0.85rem;
-    font-weight: 600;
-}
-
-.nick-status.available {
-    color: var(--success);
-}
-
-.nick-status.taken {
-    color: var(--danger);
-}
-
-.nick-status.checking {
-    color: var(--warning);
-}
-
-/* Remember me select */
-.remember-select {
-    width: 100%;
-    padding: 0.75rem 1rem;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-    color: white;
-    font-size: 1rem;
-    cursor: pointer;
-}
-
-.remember-select option {
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-}
-
-/* Disabled button state */
-.submit-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.submit-button:disabled:hover {
-    transform: none;
-    box-shadow: none;
-}
-
-/* Form validation styles */
-.form-group.error input {
-    border-color: var(--danger);
-}
-
-.form-group.success input {
-    border-color: var(--success);
-}
-
-/* Loading state */
-.loading {
-    pointer-events: none;
-    opacity: 0.6;
-}
-
-.loading::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 20px;
-    height: 20px;
-    margin: -10px 0 0 -10px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-top-color: white;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
 /* Modal Styles */
 .modal {
     position: fixed;
@@ -510,73 +388,6 @@ body.desktop-optimized {
     color: rgba(255, 255, 255, 0.8);
 }
 
-/* Auth Form Styles */
-.auth-form {
-    margin-top: 2rem;
-    animation: fadeIn 0.3s ease;
-}
-
-.auth-links {
-    text-align: center;
-    margin-top: 1.5rem;
-}
-
-.auth-links a {
-    color: rgba(255, 255, 255, 0.9);
-    text-decoration: none;
-    font-size: 0.9rem;
-    transition: all 0.3s ease;
-}
-
-.auth-links a:hover {
-    text-decoration: underline;
-    color: white;
-}
-
-.auth-switch {
-    text-align: center;
-    margin-bottom: 1rem;
-    color: rgba(255, 255, 255, 0.8);
-}
-
-.auth-switch a {
-    color: white;
-    text-decoration: none;
-    font-weight: 600;
-    transition: all 0.3s ease;
-}
-
-.auth-switch a:hover {
-    text-decoration: underline;
-}
-
-.reset-info {
-    text-align: center;
-    color: rgba(255, 255, 255, 0.9);
-    margin-bottom: 2rem;
-    font-size: 0.95rem;
-}
-
-/* Animation for form switching */
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* Form hints */
-.form-hint {
-    font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.7);
-    margin-top: 0.25rem;
-    text-align: left;
-}
-
 /* Loading Screen */
 .loading-screen {
     position: fixed;
@@ -681,7 +492,6 @@ body.desktop-optimized {
     border-radius: 50px;
     border: 1px solid var(--border-color);
 }
-
 .time-display {
     font-size: 0.9rem;
     color: var(--text-secondary);
@@ -1156,22 +966,6 @@ textarea {
     color: var(--text-primary);
     font-size: 1rem;
     transition: all 0.3s ease;
-}
-
-/* Login form specific styles */
-.auth-form input {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: white;
-}
-
-.auth-form input::placeholder {
-    color: rgba(255, 255, 255, 0.6);
-}
-
-.auth-form input:focus {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.4);
 }
 
 input:focus,
@@ -1959,6 +1753,11 @@ input[type="checkbox"] {
     background: var(--primary);
     color: white;
     animation: spin 0.5s linear;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
 .private-users-list {
