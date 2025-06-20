@@ -388,6 +388,73 @@ body.desktop-optimized {
     color: rgba(255, 255, 255, 0.8);
 }
 
+/* Auth Form Styles */
+.auth-form {
+    margin-top: 2rem;
+    animation: fadeIn 0.3s ease;
+}
+
+.auth-links {
+    text-align: center;
+    margin-top: 1.5rem;
+}
+
+.auth-links a {
+    color: rgba(255, 255, 255, 0.9);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+}
+
+.auth-links a:hover {
+    text-decoration: underline;
+    color: white;
+}
+
+.auth-switch {
+    text-align: center;
+    margin-bottom: 1rem;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.auth-switch a {
+    color: white;
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.auth-switch a:hover {
+    text-decoration: underline;
+}
+
+.reset-info {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 2rem;
+    font-size: 0.95rem;
+}
+
+/* Animation for form switching */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Form hints */
+.form-hint {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin-top: 0.25rem;
+    text-align: left;
+}
+
 /* Loading Screen */
 .loading-screen {
     position: fixed;
@@ -492,6 +559,7 @@ body.desktop-optimized {
     border-radius: 50px;
     border: 1px solid var(--border-color);
 }
+
 .time-display {
     font-size: 0.9rem;
     color: var(--text-secondary);
@@ -966,6 +1034,22 @@ textarea {
     color: var(--text-primary);
     font-size: 1rem;
     transition: all 0.3s ease;
+}
+
+/* Login form specific styles */
+.auth-form input {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.auth-form input::placeholder {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.auth-form input:focus {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.4);
 }
 
 input:focus,

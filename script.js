@@ -1,4 +1,4 @@
-// Timer Hub Application with Firebase Integration
+// Timer Hub Application with Cobra Authentication
 class TimerHub {
     constructor() {
         this.currentTimer = null;
@@ -23,9 +23,9 @@ class TimerHub {
         this.selectedMessageId = null;
         this.currentPrivateChat = null;
         this.onlineUsers = {};
-        this.allUsers = {}; // Store all users that have been online
-        this.processedUsers = new Set(); // Track processed users to avoid duplicates
-        this.customAvatar = null; // Store custom avatar selection
+        this.allUsers = {};
+        this.processedUsers = new Set();
+        this.customAvatar = null;
         
         // Settings
         this.settings = {
@@ -55,6 +55,14 @@ class TimerHub {
         
         // Wait for Firebase to be available
         this.waitForFirebase();
+        
+        // Set max birthdate (must be at least 13 years old)
+        const maxBirthdate = new Date();
+        maxBirthdate.setFullYear(maxBirthdate.getFullYear() - 13);
+        const birthdateInput = document.getElementById('registerBirthdate');
+        if (birthdateInput) {
+            birthdateInput.max = maxBirthdate.toISOString().split('T')[0];
+        }
     }
     
     // Security initialization
@@ -98,6 +106,273 @@ class TimerHub {
         if (dangerous.test(input.value)) {
             input.value = input.value.replace(dangerous, '');
             this.showNotification('Wykryto niedozwolone znaki', 'warning');
+        }
+    }
+    
+    // Auth UI Methods
+    showLogin(event) {
+        if (event) event.preventDefault();
+        document.getElementById('loginForm').style.display = 'block';
+        document.getElementById('registerForm').style.display = 'none';
+        document.getElementById('forgotPasswordForm').style.display = 'none';
+        document.getElementById('authTitle').textContent = 'Zaloguj się przy pomocy konta Cobra';
+        document.getElementById('authSwitchText').innerHTML = 'Nie masz konta? <a href="#" onclick="window.app.showRegister(event)">Zarejestruj się</a>';
+    }
+    
+    showRegister(event) {
+        if (event) event.preventDefault();
+        document.getElementById('loginForm').style.display = 'none';
+        document.getElementById('registerForm').style.display = 'block';
+        document.getElementById('forgotPasswordForm').style.display = 'none';
+        document.getElementById('authTitle').textContent = 'Utwórz konto Cobra';
+        document.getElementById('authSwitchText').innerHTML = 'Masz już konto? <a href="#" onclick="window.app.showLogin(event)">Zaloguj się</a>';
+    }
+    
+    showForgotPassword(event) {
+        if (event) event.preventDefault();
+        document.getElementById('loginForm').style.display = 'none';
+        document.getElementById('registerForm').style.display = 'none';
+        document.getElementById('forgotPasswordForm').style.display = 'block';
+        document.getElementById('authTitle').textContent = 'Resetowanie hasła';
+        document.getElementById('authSwitchText').innerHTML = '';
+    }
+    
+    // Login Handler
+    async handleLogin(event) {
+        event.preventDefault();
+        
+        const nick = document.getElementById('loginNick').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        
+        if (!this.isFirebaseReady) {
+            this.showNotification('System nie jest jeszcze gotowy. Spróbuj ponownie.', 'error');
+            return;
+        }
+        
+        try {
+            // Show loading
+            this.showNotification('Logowanie...', 'info');
+            
+            // Create email from nick (nick@cobra.auth)
+            const email = `${nick.toLowerCase()}@cobra.auth`;
+            
+            // Sign in with Firebase
+            const userCredential = await window.firebase.signInWithEmailAndPassword(
+                window.firebase.auth, 
+                email, 
+                password
+            );
+            
+            this.firebaseUser = userCredential.user;
+            
+            // Load user profile from database
+            const userRef = window.firebase.ref(window.firebase.database, `users/${this.firebaseUser.uid}/profile`);
+            const snapshot = await window.firebase.get(userRef);
+            
+            if (snapshot.exists()) {
+                const profile = snapshot.val();
+                this.currentUser = {
+                    uid: this.firebaseUser.uid,
+                    nick: profile.nick,
+                    birthdate: profile.birthdate,
+                    createdAt: profile.createdAt,
+                    email: email,
+                    picture: profile.picture || `https://ui-avatars.com/api/?name=${profile.nick}&background=6366f1&color=fff`
+                };
+                
+                // Save to localStorage
+                localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+                
+                // Show app
+                this.showApp();
+                this.showNotification(`Witaj ponownie, ${profile.nick}!`, 'success');
+            } else {
+                throw new Error('Profile not found');
+            }
+            
+        } catch (error) {
+            console.error('Login error:', error);
+            
+            if (error.code === 'auth/user-not-found') {
+                this.showNotification('Nie znaleziono użytkownika o takim nicku', 'error');
+            } else if (error.code === 'auth/wrong-password') {
+                this.showNotification('Nieprawidłowe hasło', 'error');
+            } else if (error.code === 'auth/invalid-email') {
+                this.showNotification('Nieprawidłowy nick', 'error');
+            } else {
+                this.showNotification('Błąd logowania. Spróbuj ponownie.', 'error');
+            }
+        }
+    }
+    
+    // Register Handler
+    async handleRegister(event) {
+        event.preventDefault();
+        
+        const nick = document.getElementById('registerNick').value.trim();
+        const birthdate = document.getElementById('registerBirthdate').value;
+        const password = document.getElementById('registerPassword').value;
+        const passwordConfirm = document.getElementById('registerPasswordConfirm').value;
+        const acceptTerms = document.getElementById('acceptTerms').checked;
+        
+        // Validation
+        if (password !== passwordConfirm) {
+            this.showNotification('Hasła nie są identyczne', 'error');
+            return;
+        }
+        
+        if (!acceptTerms) {
+            this.showNotification('Musisz zaakceptować regulamin', 'error');
+            return;
+        }
+        
+        // Check age
+        const birthdateObj = new Date(birthdate);
+        const age = Math.floor((new Date() - birthdateObj) / (365.25 * 24 * 60 * 60 * 1000));
+        if (age < 13) {
+            this.showNotification('Musisz mieć minimum 13 lat', 'error');
+            return;
+        }
+        
+        if (!this.isFirebaseReady) {
+            this.showNotification('System nie jest jeszcze gotowy. Spróbuj ponownie.', 'error');
+            return;
+        }
+        
+        try {
+            // Show loading
+            this.showNotification('Tworzenie konta...', 'info');
+            
+            // Check if nick is already taken
+            const usersRef = window.firebase.ref(window.firebase.database, 'users');
+            const usersSnapshot = await window.firebase.get(usersRef);
+            
+            let nickTaken = false;
+            if (usersSnapshot.exists()) {
+                usersSnapshot.forEach((userSnapshot) => {
+                    const userData = userSnapshot.val();
+                    if (userData.profile && userData.profile.nick.toLowerCase() === nick.toLowerCase()) {
+                        nickTaken = true;
+                    }
+                });
+            }
+            
+            if (nickTaken) {
+                this.showNotification('Ten nick jest już zajęty', 'error');
+                return;
+            }
+            
+            // Create email from nick
+            const email = `${nick.toLowerCase()}@cobra.auth`;
+            
+            // Create user with Firebase
+            const userCredential = await window.firebase.createUserWithEmailAndPassword(
+                window.firebase.auth, 
+                email, 
+                password
+            );
+            
+            this.firebaseUser = userCredential.user;
+            
+            // Create user profile
+            const profile = {
+                nick: nick,
+                birthdate: birthdate,
+                createdAt: new Date().toISOString(),
+                picture: `https://ui-avatars.com/api/?name=${nick}&background=6366f1&color=fff`,
+                lastActive: window.firebase.serverTimestamp()
+            };
+            
+            // Save profile to database
+            const userRef = window.firebase.ref(window.firebase.database, `users/${this.firebaseUser.uid}/profile`);
+            await window.firebase.set(userRef, profile);
+            
+            // Set current user
+            this.currentUser = {
+                uid: this.firebaseUser.uid,
+                nick: nick,
+                birthdate: birthdate,
+                createdAt: profile.createdAt,
+                email: email,
+                picture: profile.picture
+            };
+            
+            // Save to localStorage
+            localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+            
+            // Show app
+            this.showApp();
+            this.showNotification(`Witaj w Timer Hub, ${nick}!`, 'success');
+            
+        } catch (error) {
+            console.error('Registration error:', error);
+            
+            if (error.code === 'auth/email-already-in-use') {
+                this.showNotification('Ten nick jest już zajęty', 'error');
+            } else if (error.code === 'auth/weak-password') {
+                this.showNotification('Hasło jest za słabe. Użyj minimum 6 znaków.', 'error');
+            } else {
+                this.showNotification('Błąd rejestracji. Spróbuj ponownie.', 'error');
+            }
+        }
+    }
+    
+    // Forgot Password Handler
+    async handleForgotPassword(event) {
+        event.preventDefault();
+        
+        const nick = document.getElementById('forgotNick').value.trim();
+        
+        if (!this.isFirebaseReady) {
+            this.showNotification('System nie jest jeszcze gotowy. Spróbuj ponownie.', 'error');
+            return;
+        }
+        
+        try {
+            // Since we're using fake emails, we can't really send reset emails
+            // This is just for demonstration
+            this.showNotification('Funkcja resetowania hasła jest w fazie testowej', 'info');
+            
+            // In a real app, you would implement a custom password reset flow
+            // For now, just log the request
+            console.log(`Password reset requested for nick: ${nick}`);
+            
+            // Show success message
+            setTimeout(() => {
+                this.showNotification('Instrukcje resetowania hasła zostały zapisane w konsoli', 'success');
+                this.showLogin();
+            }, 2000);
+            
+        } catch (error) {
+            console.error('Reset password error:', error);
+            this.showNotification('Błąd resetowania hasła', 'error');
+        }
+    }
+    
+    // Change Password (for logged in users)
+    async changePassword() {
+        const newPassword = prompt('Podaj nowe hasło (minimum 6 znaków):');
+        if (!newPassword || newPassword.length < 6) {
+            this.showNotification('Hasło musi mieć minimum 6 znaków', 'error');
+            return;
+        }
+        
+        const confirmPassword = prompt('Potwierdź nowe hasło:');
+        if (newPassword !== confirmPassword) {
+            this.showNotification('Hasła nie są identyczne', 'error');
+            return;
+        }
+        
+        try {
+            await window.firebase.updatePassword(this.firebaseUser, newPassword);
+            this.showNotification('Hasło zostało zmienione', 'success');
+        } catch (error) {
+            console.error('Change password error:', error);
+            if (error.code === 'auth/requires-recent-login') {
+                this.showNotification('Musisz się ponownie zalogować aby zmienić hasło', 'error');
+            } else {
+                this.showNotification('Błąd zmiany hasła', 'error');
+            }
         }
     }
     
@@ -200,7 +475,7 @@ class TimerHub {
         
         // Save custom avatar to localStorage
         if (this.currentUser) {
-            localStorage.setItem(`customAvatar_${this.currentUser.sub}`, this.customAvatar);
+            localStorage.setItem(`customAvatar_${this.currentUser.uid}`, this.customAvatar);
         }
         
         // Update avatar display
@@ -208,19 +483,19 @@ class TimerHub {
         
         // Update Firebase profile if connected
         if (this.firebaseUser && this.isFirebaseReady) {
-            this.updateFirebaseUserProfile(this.currentUser);
+            this.updateFirebaseUserProfile();
         }
         
         this.closeAvatarModal();
         this.showNotification('Avatar zmieniony!', 'success');
     }
     
-    resetToGoogleAvatar() {
+    resetToDefaultAvatar() {
         this.customAvatar = null;
         
         // Remove custom avatar from localStorage
         if (this.currentUser) {
-            localStorage.removeItem(`customAvatar_${this.currentUser.sub}`);
+            localStorage.removeItem(`customAvatar_${this.currentUser.uid}`);
         }
         
         // Update avatar display
@@ -228,11 +503,11 @@ class TimerHub {
         
         // Update Firebase profile if connected
         if (this.firebaseUser && this.isFirebaseReady) {
-            this.updateFirebaseUserProfile(this.currentUser);
+            this.updateFirebaseUserProfile();
         }
         
         this.closeAvatarModal();
-        this.showNotification('Przywrócono zdjęcie Google', 'success');
+        this.showNotification('Przywrócono domyślny avatar', 'success');
     }
     
     updateAvatarDisplay() {
@@ -263,7 +538,7 @@ class TimerHub {
     
     loadCustomAvatar() {
         if (this.currentUser) {
-            const savedAvatar = localStorage.getItem(`customAvatar_${this.currentUser.sub}`);
+            const savedAvatar = localStorage.getItem(`customAvatar_${this.currentUser.uid}`);
             if (savedAvatar) {
                 this.customAvatar = savedAvatar;
                 this.updateAvatarDisplay();
@@ -396,7 +671,8 @@ class TimerHub {
             meetingsHistory: this.meetingsHistory,
             favoriteMeetings: this.favoriteMeetings,
             settings: this.settings,
-            exportDate: new Date().toISOString()
+            exportDate: new Date().toISOString(),
+            userNick: this.currentUser?.nick
         };
         
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -484,7 +760,7 @@ class TimerHub {
                 
                 // Clear from storage
                 if (this.currentUser) {
-                    const userKey = this.currentUser.sub;
+                    const userKey = this.currentUser.uid;
                     localStorage.removeItem(`watchHistory_${userKey}`);
                     localStorage.removeItem(`favoriteChannels_${userKey}`);
                     localStorage.removeItem(`meetings_${userKey}`);
@@ -561,17 +837,12 @@ class TimerHub {
             if (user) {
                 console.log('Firebase user authenticated:', user.uid);
                 this.firebaseUser = user;
-                await this.setupUserPresence();
-                await this.syncUserData();
-                this.listenToChat();
-                this.listenToMessageReads();
-                this.listenToOnlineUsers();
-                this.listenToPrivateMessages();
-                this.loadAllUsersFromFirebase();
-                this.updateOnlineUsers();
-                this.loadLastReadMessage();
+                
+                // Setup user after authentication
+                await this.setupUserAfterAuth();
             } else {
                 console.log('No Firebase user detected');
+                this.firebaseUser = null;
             }
         });
         
@@ -579,55 +850,34 @@ class TimerHub {
         this.init();
     }
     
-    async createAnonymousUser() {
-        if (!this.isFirebaseReady) {
-            console.error('Firebase not ready');
-            return false;
-        }
+    async setupUserAfterAuth() {
+        if (!this.firebaseUser || !this.isFirebaseReady) return;
         
-        try {
-            console.log('Creating anonymous user...');
-            const userCredential = await window.firebase.signInAnonymously(window.firebase.auth);
-            this.firebaseUser = userCredential.user;
-            console.log('Anonymous user created:', this.firebaseUser.uid);
-            
-            // Update profile with Google data if available
-            if (this.currentUser) {
-                await this.updateFirebaseUserProfile(this.currentUser);
-            }
-            
-            // Setup presence and listeners
-            await this.setupUserPresence();
-            await this.syncUserData();
-            this.listenToChat();
-            this.listenToMessageReads();
-            this.listenToOnlineUsers();
-            this.listenToPrivateMessages();
-            this.loadAllUsersFromFirebase();
-            this.updateOnlineUsers();
-            this.loadLastReadMessage();
-            
-            return true;
-        } catch (error) {
-            console.error('Error creating anonymous user:', error);
-            return false;
-        }
+        await this.setupUserPresence();
+        await this.syncUserData();
+        this.listenToChat();
+        this.listenToMessageReads();
+        this.listenToOnlineUsers();
+        this.listenToPrivateMessages();
+        this.loadAllUsersFromFirebase();
+        this.updateOnlineUsers();
+        this.loadLastReadMessage();
     }
     
-    async updateFirebaseUserProfile(googleUser) {
-        if (!this.firebaseUser || !this.isFirebaseReady) return;
+    async updateFirebaseUserProfile() {
+        if (!this.firebaseUser || !this.isFirebaseReady || !this.currentUser) return;
         
         const userId = this.firebaseUser.uid;
         const profileRef = window.firebase.ref(window.firebase.database, `users/${userId}/profile`);
         
         try {
             const profileData = {
-                name: googleUser.name,
-                email: googleUser.email,
-                picture: this.customAvatar || googleUser.picture,
-                googleId: googleUser.sub,
-                lastActive: window.firebase.serverTimestamp(),
-                hasCustomAvatar: !!this.customAvatar
+                nick: this.currentUser.nick,
+                birthdate: this.currentUser.birthdate,
+                createdAt: this.currentUser.createdAt,
+                picture: this.customAvatar ? this.createAvatarDataUrl(this.customAvatar) : this.currentUser.picture,
+                hasCustomAvatar: !!this.customAvatar,
+                lastActive: window.firebase.serverTimestamp()
             };
             
             await window.firebase.set(profileRef, profileData);
@@ -636,26 +886,38 @@ class TimerHub {
         }
     }
     
-    init() {
-        // Check pending login
-        const pendingLogin = localStorage.getItem('pendingGoogleLogin');
-        if (pendingLogin) {
-            try {
-                const data = JSON.parse(pendingLogin);
-                this.handleGoogleLogin(data.userInfo, data.credential);
-                localStorage.removeItem('pendingGoogleLogin');
-                return;
-            } catch (error) {
-                console.error('Error processing pending login:', error);
-                localStorage.removeItem('pendingGoogleLogin');
-            }
-        }
+    createAvatarDataUrl(emoji) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 100;
+        canvas.height = 100;
+        const ctx = canvas.getContext('2d');
         
+        // Background
+        ctx.fillStyle = '#6366f1';
+        ctx.fillRect(0, 0, 100, 100);
+        
+        // Emoji
+        ctx.font = '60px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(emoji, 50, 50);
+        
+        return canvas.toDataURL();
+    }
+    
+    init() {
         // Check if user is logged in
         const savedUser = localStorage.getItem('currentUser');
         if (savedUser) {
             try {
                 this.currentUser = JSON.parse(savedUser);
+                
+                // Auto-login with Firebase if we have credentials
+                if (this.isFirebaseReady && !this.firebaseUser) {
+                    // Try to restore session
+                    console.log('Attempting to restore Firebase session...');
+                }
+                
                 this.showApp();
             } catch (error) {
                 console.error('Error parsing saved user:', error);
@@ -755,32 +1017,6 @@ class TimerHub {
         }
     }
     
-    async handleGoogleLogin(userInfo, credential) {
-        try {
-            this.currentUser = {
-                email: userInfo.email,
-                name: userInfo.name,
-                picture: userInfo.picture,
-                sub: userInfo.sub
-            };
-            
-            // Save user to localStorage
-            localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
-            
-            // Show app first
-            this.showApp();
-            
-            // Then handle Firebase authentication
-            if (this.isFirebaseReady && !this.firebaseUser) {
-                // Create anonymous user immediately after Google login
-                await this.createAnonymousUser();
-            }
-        } catch (error) {
-            console.error('Login error:', error);
-            alert('Błąd logowania. Spróbuj ponownie.');
-        }
-    }
-    
     async setupUserPresence() {
         if (!this.firebaseUser || !this.isFirebaseReady || !this.currentUser) return;
         
@@ -796,9 +1032,8 @@ class TimerHub {
             state: 'online',
             last_changed: window.firebase.serverTimestamp(),
             user_info: {
-                name: this.currentUser.name,
-                email: this.currentUser.email,
-                picture: this.customAvatar || this.currentUser.picture
+                nick: this.currentUser.nick,
+                picture: this.customAvatar ? this.createAvatarDataUrl(this.customAvatar) : this.currentUser.picture
             }
         };
         
@@ -829,9 +1064,8 @@ class TimerHub {
             state: status,
             last_changed: window.firebase.serverTimestamp(),
             user_info: {
-                name: this.currentUser.name,
-                email: this.currentUser.email,
-                picture: this.customAvatar || this.currentUser.picture
+                nick: this.currentUser.nick,
+                picture: this.customAvatar ? this.createAvatarDataUrl(this.customAvatar) : this.currentUser.picture
             }
         });
     }
@@ -872,7 +1106,7 @@ class TimerHub {
     
     loadUserDataFromLocalStorage() {
         if (!this.currentUser) return;
-        const userKey = this.currentUser.sub;
+        const userKey = this.currentUser.uid;
         this.watchHistory = this.loadFromStorage(`watchHistory_${userKey}`) || [];
         this.favoriteChannels = this.loadFromStorage(`favoriteChannels_${userKey}`) || {};
         this.meetings = this.loadFromStorage(`meetings_${userKey}`) || [];
@@ -888,9 +1122,10 @@ class TimerHub {
         
         const userData = {
             profile: {
-                name: this.currentUser.name,
-                email: this.currentUser.email,
-                picture: this.customAvatar || this.currentUser.picture,
+                nick: this.currentUser.nick,
+                birthdate: this.currentUser.birthdate,
+                createdAt: this.currentUser.createdAt,
+                picture: this.customAvatar ? this.createAvatarDataUrl(this.customAvatar) : this.currentUser.picture,
                 lastActive: window.firebase.serverTimestamp()
             },
             watchHistory: this.watchHistory,
@@ -909,7 +1144,7 @@ class TimerHub {
     
     async saveUserData(key, data) {
         // Always save to localStorage
-        const userKey = this.currentUser.sub;
+        const userKey = this.currentUser.uid;
         this.saveToStorage(`${key}_${userKey}`, data);
         
         // Try to save to Firebase
@@ -1018,7 +1253,7 @@ class TimerHub {
             return {
                 ...user,
                 unreadCount,
-                name: user.userInfo.name || 'Użytkownik',
+                name: user.userInfo.nick || 'Użytkownik',
                 picture: user.userInfo.picture || 'https://ui-avatars.com/api/?name=User&background=6366f1&color=fff'
             };
         });
@@ -1166,8 +1401,8 @@ class TimerHub {
         
         const message = {
             senderId: this.firebaseUser.uid,
-            senderName: this.currentUser.name,
-            senderPicture: this.customAvatar || this.currentUser.picture,
+            senderName: this.currentUser.nick,
+            senderPicture: this.customAvatar ? this.createAvatarDataUrl(this.customAvatar) : this.currentUser.picture,
             content: this.escapeHtml(content),
             timestamp: Date.now(),
             read: false
@@ -1191,7 +1426,7 @@ class TimerHub {
             // Send notification to recipient if they're online
             if (this.shouldShowNotification('chat') && this.settings.pushNotifications) {
                 this.sendPushNotification(
-                    `Nowa wiadomość od ${this.currentUser.name}`,
+                    `Nowa wiadomość od ${this.currentUser.nick}`,
                     content.substring(0, 100)
                 );
             }
@@ -1282,7 +1517,7 @@ class TimerHub {
             const readRef = window.firebase.ref(window.firebase.database, `chat/reads/${messageId}/${this.firebaseUser.uid}`);
             await window.firebase.set(readRef, {
                 userId: this.firebaseUser.uid,
-                userName: this.currentUser.name,
+                userName: this.currentUser.nick,
                 readAt: window.firebase.serverTimestamp()
             });
         } catch (error) {
@@ -1526,48 +1761,33 @@ class TimerHub {
         
         if (!content || content.length > 500) return;
         
+        // Check if user is logged in and Firebase is ready
+        if (!this.firebaseUser || !this.isFirebaseReady) {
+            this.showNotification('Musisz być zalogowany aby wysyłać wiadomości', 'error');
+            return;
+        }
+        
         // Clear input immediately for better UX
         input.value = '';
         
-        // Ensure we have Firebase user
-        if (!this.firebaseUser && this.isFirebaseReady) {
-            console.log('No Firebase user, creating one...');
-            const success = await this.createAnonymousUser();
-            if (!success) {
-                this.showNotification('Błąd połączenia z czatem. Spróbuj ponownie.', 'error');
-                return;
-            }
-        }
-        
         // Create message object
         const message = {
-            userId: this.firebaseUser?.uid || 'anonymous_' + Date.now(),
-            userName: this.currentUser.name,
-            userPicture: this.customAvatar || this.currentUser.picture,
+            userId: this.firebaseUser.uid,
+            userName: this.currentUser.nick,
+            userPicture: this.customAvatar ? this.createAvatarDataUrl(this.customAvatar) : this.currentUser.picture,
             content: this.escapeHtml(content),
             timestamp: Date.now(),
             type: 'user'
         };
         
         try {
-            if (!this.firebaseUser) {
-                throw new Error('No Firebase user available');
-            }
-            
             // Send to Firebase
             const chatRef = window.firebase.ref(window.firebase.database, 'chat/messages');
             const result = await window.firebase.push(chatRef, message);
             console.log('Message sent successfully, key:', result.key);
         } catch (error) {
             console.error('Error sending message:', error);
-            
-            // Show message locally
-            this.chatMessages.push({
-                id: 'local_' + Date.now(),
-                ...message
-            });
-            this.displayChatMessages();
-            this.showNotification('Wiadomość wysłana lokalnie (brak połączenia z serwerem)', 'warning');
+            this.showNotification('Błąd wysyłania wiadomości', 'error');
         }
     }
     
@@ -1592,12 +1812,6 @@ class TimerHub {
                         this.markMessageAsRead(msg.id);
                     }
                 });
-            }
-            
-            // Ensure Firebase connection when opening chat
-            if (this.isFirebaseReady && !this.firebaseUser && this.currentUser) {
-                console.log('Chat opened, creating Firebase user...');
-                await this.createAnonymousUser();
             }
         }
     }
@@ -1655,9 +1869,14 @@ class TimerHub {
         document.querySelector('.container').style.display = 'block';
         
         // Set user data in UI
-        document.getElementById('userName').textContent = this.currentUser.name;
+        document.getElementById('userName').textContent = this.currentUser.nick;
         document.getElementById('userAvatar').src = this.currentUser.picture;
-        document.getElementById('welcomeName').textContent = this.currentUser.name.split(' ')[0];
+        document.getElementById('welcomeName').textContent = this.currentUser.nick;
+        
+        // Set account info in settings
+        document.getElementById('accountNick').textContent = this.currentUser.nick;
+        document.getElementById('accountBirthdate').textContent = new Date(this.currentUser.birthdate).toLocaleDateString(this.settings.region);
+        document.getElementById('accountCreated').textContent = new Date(this.currentUser.createdAt).toLocaleDateString(this.settings.region);
         
         // Load custom avatar if exists
         this.loadCustomAvatar();
@@ -1685,14 +1904,6 @@ class TimerHub {
         
         // Load user data
         this.loadUserDataFromLocalStorage();
-        
-        // Ensure Firebase connection after app loads
-        if (this.isFirebaseReady && !this.firebaseUser) {
-            setTimeout(async () => {
-                console.log('App loaded, creating Firebase user...');
-                await this.createAnonymousUser();
-            }, 1000);
-        }
     }
     
     logout() {
@@ -1704,7 +1915,7 @@ class TimerHub {
             
             // Sign out from Firebase
             if (this.firebaseUser && this.isFirebaseReady) {
-                window.firebase.auth.signOut().catch(error => {
+                window.firebase.signOut(window.firebase.auth).catch(error => {
                     console.error('Firebase signout error:', error);
                 });
             }
@@ -1721,7 +1932,6 @@ class TimerHub {
             
             // Clear local data
             localStorage.removeItem('currentUser');
-            localStorage.removeItem('pendingGoogleLogin');
             
             // Clear session timeout
             if (this.sessionTimeout) {
