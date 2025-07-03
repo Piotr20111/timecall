@@ -42,6 +42,42 @@
         <h2>Timer Hub</h2>
     </div>
 
+    <!-- Search Overlay -->
+    <div id="searchOverlay" class="search-overlay">
+        <div class="search-container">
+            <div class="search-header">
+                <i class="fas fa-search"></i>
+                <input type="text" id="universalSearch" placeholder="Szukaj spotkań, filmów, kanałów..." autocomplete="off">
+                <button class="search-close" onclick="window.app.closeSearch()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="search-status" id="searchStatus" style="display: none;">
+                <div class="search-spinner"></div>
+                <span>Wyszukiwanie TimerHub...</span>
+            </div>
+            <div class="search-results" id="searchResults"></div>
+        </div>
+    </div>
+
+    <!-- AI Assistant -->
+    <div id="aiAssistant" class="ai-assistant">
+        <div class="ai-header">
+            <i class="fas fa-robot"></i>
+            <span>Asystent TimerHub</span>
+            <button class="ai-close" onclick="window.app.closeAIAssistant()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="ai-messages" id="aiMessages"></div>
+        <div class="ai-input-container">
+            <input type="text" id="aiInput" placeholder="Zapytaj o cokolwiek..." autocomplete="off">
+            <button onclick="window.app.sendAIMessage()">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
+    </div>
+
     <!-- Avatar Selection Modal -->
     <div id="avatarModal" class="modal">
         <div class="modal-content">
@@ -123,6 +159,36 @@
         </div>
     </div>
 
+    <!-- Notes Modal -->
+    <div id="notesModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-sticky-note"></i> <span id="notesTitle">Notatki</span></h3>
+                <button class="modal-close" onclick="window.app.closeNotesModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="notes-tabs">
+                    <button class="note-tab active" onclick="window.app.switchNoteTab('before')">Przed spotkaniem</button>
+                    <button class="note-tab" onclick="window.app.switchNoteTab('during')">Podczas spotkania</button>
+                    <button class="note-tab" onclick="window.app.switchNoteTab('after')">Po spotkaniu</button>
+                </div>
+                <div class="notes-content">
+                    <textarea id="notesTextarea" placeholder="Wprowadź notatki..."></textarea>
+                </div>
+                <div class="notes-actions">
+                    <button class="notes-save-btn" onclick="window.app.saveNotes()">
+                        <i class="fas fa-save"></i> Zapisz
+                    </button>
+                    <button class="notes-export-btn" onclick="window.app.exportNotes()">
+                        <i class="fas fa-download"></i> Eksportuj
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Main Container -->
     <div class="container" style="display: none;">
         <!-- Header -->
@@ -133,6 +199,12 @@
                     Timer Hub
                 </h1>
                 <div class="header-actions">
+                    <button class="search-btn" onclick="window.app.openSearch()">
+                        <i class="fas fa-search"></i>
+                    </button>
+                    <button class="ai-btn" onclick="window.app.openAIAssistant()">
+                        <i class="fas fa-robot"></i>
+                    </button>
                     <div class="user-info" id="userInfo">
                         <img id="userAvatar" src="" alt="Avatar" class="user-avatar" onerror="this.src='https://ui-avatars.com/api/?name=User&background=6366f1&color=fff'" onclick="window.app.openAvatarModal()">
                         <span id="userName"></span>
@@ -193,6 +265,16 @@
                         </label>
                     </div>
                     <div class="settings-item">
+                        <label>Dźwięk powiadomień:</label>
+                        <select id="notificationSound" onchange="window.app.changeNotificationSound(this.value)">
+                            <option value="default">Domyślny</option>
+                            <option value="bell">Dzwonek</option>
+                            <option value="chime">Kuranty</option>
+                            <option value="pop">Pop</option>
+                            <option value="none">Brak</option>
+                        </select>
+                    </div>
+                    <div class="settings-item">
                         <label>Wycisz powiadomienia na:</label>
                         <select id="muteNotifications" onchange="window.app.muteNotifications(this.value)">
                             <option value="0">Nie wyciszaj</option>
@@ -218,6 +300,8 @@
                             <option value="orange">Pomarańczowy</option>
                             <option value="pink">Różowy</option>
                             <option value="teal">Turkusowy</option>
+                            <option value="gradient">Gradientowy</option>
+                            <option value="dark-pro">Dark Pro</option>
                         </select>
                     </div>
                     <div class="settings-item">
@@ -242,6 +326,12 @@
                         <label>
                             <input type="checkbox" id="enableCompactMode" onchange="window.app.toggleCompactMode()">
                             <span>Tryb kompaktowy</span>
+                        </label>
+                    </div>
+                    <div class="settings-item">
+                        <label>
+                            <input type="checkbox" id="enableDarkModeSched" onchange="window.app.toggleDarkModeSchedule()">
+                            <span>Automatyczny tryb ciemny (19:00-7:00)</span>
                         </label>
                     </div>
                 </div>
@@ -276,6 +366,31 @@
                             <option value="24h">24-godzinny</option>
                             <option value="12h">12-godzinny (AM/PM)</option>
                         </select>
+                    </div>
+                </div>
+
+                <!-- Productivity Settings -->
+                <div class="settings-section">
+                    <h4><i class="fas fa-tasks"></i> Produktywność</h4>
+                    <div class="settings-item">
+                        <label>
+                            <input type="checkbox" id="enablePomodoro" onchange="window.app.togglePomodoro()">
+                            <span>Włącz tryb Pomodoro</span>
+                        </label>
+                    </div>
+                    <div class="settings-item">
+                        <label>Czas pracy (minuty):</label>
+                        <input type="number" id="pomodoroWork" value="25" min="1" max="60" onchange="window.app.updatePomodoroSettings()">
+                    </div>
+                    <div class="settings-item">
+                        <label>Czas przerwy (minuty):</label>
+                        <input type="number" id="pomodoroBreak" value="5" min="1" max="30" onchange="window.app.updatePomodoroSettings()">
+                    </div>
+                    <div class="settings-item">
+                        <label>
+                            <input type="checkbox" id="enableAutoBreak" onchange="window.app.toggleAutoBreak()">
+                            <span>Automatyczne przerwy co 2 godziny</span>
+                        </label>
                     </div>
                 </div>
 
@@ -319,6 +434,12 @@
                             <span>Pokaż potwierdzenia przeczytania</span>
                         </label>
                     </div>
+                    <div class="settings-item">
+                        <label>
+                            <input type="checkbox" id="enableAnalytics" checked onchange="window.app.toggleAnalytics()">
+                            <span>Zbieraj dane analityczne</span>
+                        </label>
+                    </div>
                 </div>
 
                 <!-- Data Management -->
@@ -335,8 +456,35 @@
                         </button>
                     </div>
                     <div class="settings-item">
+                        <button class="settings-button" onclick="window.app.syncWithCloud()">
+                            <i class="fas fa-cloud-upload-alt"></i> Synchronizuj z chmurą
+                        </button>
+                    </div>
+                    <div class="settings-item">
                         <button class="settings-button danger" onclick="window.app.clearAllData()">
                             <i class="fas fa-trash"></i> Wyczyść wszystkie dane
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Advanced Settings -->
+                <div class="settings-section">
+                    <h4><i class="fas fa-tools"></i> Zaawansowane</h4>
+                    <div class="settings-item">
+                        <label>
+                            <input type="checkbox" id="enableDebugMode" onchange="window.app.toggleDebugMode()">
+                            <span>Tryb debugowania</span>
+                        </label>
+                    </div>
+                    <div class="settings-item">
+                        <label>
+                            <input type="checkbox" id="enableKeyboardShortcuts" checked onchange="window.app.toggleKeyboardShortcuts()">
+                            <span>Skróty klawiszowe</span>
+                        </label>
+                    </div>
+                    <div class="settings-item">
+                        <button class="settings-button" onclick="window.app.showKeyboardShortcuts()">
+                            <i class="fas fa-keyboard"></i> Pokaż skróty klawiszowe
                         </button>
                     </div>
                 </div>
@@ -378,7 +526,18 @@
                         <p class="text-muted">Rozpocznij rozmowę z innymi użytkownikami</p>
                     </div>
                 </div>
+                <div class="chat-typing" id="chatTyping" style="display: none;">
+                    <span class="typing-indicator">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </span>
+                    <span id="typingUsers"></span>
+                </div>
                 <form class="chat-input-form" onsubmit="window.app.sendMessage(event)">
+                    <button type="button" class="chat-emoji-btn" onclick="window.app.toggleEmojiPicker()">
+                        <i class="far fa-smile"></i>
+                    </button>
                     <input 
                         type="text" 
                         id="chatInput" 
@@ -386,11 +545,28 @@
                         placeholder="Napisz wiadomość..."
                         maxlength="500"
                         autocomplete="off"
+                        oninput="window.app.handleChatTyping()"
                     >
                     <button type="submit" class="chat-send">
                         <i class="fas fa-paper-plane"></i>
                     </button>
                 </form>
+                <div class="emoji-picker" id="emojiPicker" style="display: none;">
+                    <div class="emoji-grid">
+                        <span onclick="window.app.insertEmoji('😀')">😀</span>
+                        <span onclick="window.app.insertEmoji('😂')">😂</span>
+                        <span onclick="window.app.insertEmoji('😍')">😍</span>
+                        <span onclick="window.app.insertEmoji('🤔')">🤔</span>
+                        <span onclick="window.app.insertEmoji('😎')">😎</span>
+                        <span onclick="window.app.insertEmoji('😢')">😢</span>
+                        <span onclick="window.app.insertEmoji('😡')">😡</span>
+                        <span onclick="window.app.insertEmoji('👍')">👍</span>
+                        <span onclick="window.app.insertEmoji('👎')">👎</span>
+                        <span onclick="window.app.insertEmoji('❤️')">❤️</span>
+                        <span onclick="window.app.insertEmoji('🎉')">🎉</span>
+                        <span onclick="window.app.insertEmoji('🔥')">🔥</span>
+                    </div>
+                </div>
             </div>
             
             <!-- Private Messages -->
@@ -401,6 +577,9 @@
                         <button class="refresh-users-btn" onclick="window.app.refreshUsersList()">
                             <i class="fas fa-sync-alt"></i>
                         </button>
+                    </div>
+                    <div class="private-users-search">
+                        <input type="text" id="privateUsersSearch" placeholder="Szukaj użytkownika..." oninput="window.app.filterPrivateUsers()">
                     </div>
                     <div class="private-users-list" id="privateUsersList">
                         <p class="empty-state">Ładowanie użytkowników...</p>
@@ -439,6 +618,12 @@
             <button id="copyMessageBtn" onclick="window.app.copyMessageFromMenu()">
                 <i class="fas fa-copy"></i> Kopiuj
             </button>
+            <button id="replyMessageBtn" onclick="window.app.replyToMessage()">
+                <i class="fas fa-reply"></i> Odpowiedz
+            </button>
+            <button id="editMessageBtn" onclick="window.app.editMessage()" style="display: none;">
+                <i class="fas fa-edit"></i> Edytuj
+            </button>
             <button id="deleteMessageBtn" onclick="window.app.deleteMessageFromMenu()" style="display: none;">
                 <i class="fas fa-trash"></i> Usuń
             </button>
@@ -449,6 +634,26 @@
             <div class="welcome-section">
                 <h2>Witaj, <span id="welcomeName"></span>!</h2>
                 <p>Zarządzaj swoim czasem podczas spotkań i oglądania filmów</p>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="quick-actions">
+                <button class="quick-action-btn" onclick="window.app.startQuickTimer()">
+                    <i class="fas fa-stopwatch"></i>
+                    <span>Szybki timer</span>
+                </button>
+                <button class="quick-action-btn" onclick="window.app.startPomodoro()">
+                    <i class="fas fa-seedling"></i>
+                    <span>Pomodoro</span>
+                </button>
+                <button class="quick-action-btn" onclick="window.app.showCalendarIntegration()">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>Kalendarz</span>
+                </button>
+                <button class="quick-action-btn" onclick="window.app.showStats()">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Statystyki</span>
+                </button>
             </div>
             
             <div class="menu-grid">
@@ -497,6 +702,21 @@
                         <span class="stat-label">Ulubionych kanałów</span>
                     </div>
                 </div>
+                <div class="stat-card">
+                    <i class="fas fa-fire"></i>
+                    <div class="stat-content">
+                        <span class="stat-value" id="streakDays">0</span>
+                        <span class="stat-label">Dni z rzędu</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="recent-activity">
+                <h3><i class="fas fa-clock"></i> Ostatnia aktywność</h3>
+                <div id="recentActivityList" class="activity-list">
+                    <p class="empty-state">Brak ostatniej aktywności</p>
+                </div>
             </div>
         </div>
 
@@ -518,12 +738,16 @@
                 </button>
                 <button class="tab" onclick="window.app.showTeamsTab('upcoming', event)">
                     <i class="fas fa-calendar"></i> Nadchodzące
+                    <span class="tab-badge" id="upcomingBadge" style="display: none;">0</span>
                 </button>
                 <button class="tab" onclick="window.app.showTeamsTab('favorites', event)">
                     <i class="fas fa-star"></i> Ulubione
                 </button>
                 <button class="tab" onclick="window.app.showTeamsTab('history', event)">
                     <i class="fas fa-history"></i> Historia
+                </button>
+                <button class="tab" onclick="window.app.showTeamsTab('tags', event)">
+                    <i class="fas fa-tags"></i> Tagi
                 </button>
             </div>
 
@@ -568,6 +792,37 @@
                             <input type="number" id="meetingDuration" value="60" min="1" required>
                         </div>
 
+                        <div class="form-group">
+                            <label for="meetingTags">
+                                <i class="fas fa-tags"></i> Tagi (oddzielone przecinkami)
+                            </label>
+                            <input type="text" id="meetingTags" placeholder="praca, projekt, ważne">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="meetingReminders">
+                                <i class="fas fa-bell"></i> Przypomnienia
+                            </label>
+                            <div class="reminder-options">
+                                <label>
+                                    <input type="checkbox" name="reminders" value="60" checked>
+                                    <span>1 godzina przed</span>
+                                </label>
+                                <label>
+                                    <input type="checkbox" name="reminders" value="30" checked>
+                                    <span>30 minut przed</span>
+                                </label>
+                                <label>
+                                    <input type="checkbox" name="reminders" value="15" checked>
+                                    <span>15 minut przed</span>
+                                </label>
+                                <label>
+                                    <input type="checkbox" name="reminders" value="5">
+                                    <span>5 minut przed</span>
+                                </label>
+                            </div>
+                        </div>
+
                         <div class="form-group checkbox-group">
                             <label>
                                 <input type="checkbox" id="autoOpenTeams" checked>
@@ -597,6 +852,15 @@
                         <button class="add-meeting-btn gradient-btn" onclick="window.app.showAddUpcomingMeeting()">
                             <i class="fas fa-plus-circle"></i> Dodaj spotkanie
                         </button>
+                    </div>
+                    <div class="meetings-filters">
+                        <input type="text" id="meetingsSearch" placeholder="Szukaj spotkań..." oninput="window.app.filterMeetings()">
+                        <select id="meetingsFilter" onchange="window.app.filterMeetings()">
+                            <option value="all">Wszystkie</option>
+                            <option value="today">Dzisiaj</option>
+                            <option value="week">Ten tydzień</option>
+                            <option value="month">Ten miesiąc</option>
+                        </select>
                     </div>
                     <div id="upcomingMeetings" class="meetings-container">
                         <p class="empty-state">Brak zaplanowanych spotkań</p>
@@ -628,6 +892,23 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Tags Tab -->
+            <div id="tagsTab" class="tab-content" style="display: none;">
+                <div class="tags-section glass-card">
+                    <h3>Zarządzanie tagami</h3>
+                    <div class="tag-input-group">
+                        <input type="text" id="newTagInput" placeholder="Nowy tag...">
+                        <input type="color" id="newTagColor" value="#6366f1">
+                        <button onclick="window.app.addNewTag()">
+                            <i class="fas fa-plus"></i> Dodaj
+                        </button>
+                    </div>
+                    <div id="tagsList" class="tags-list">
+                        <p class="empty-state">Brak tagów</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- YouTube Mode -->
@@ -652,6 +933,9 @@
                 <button class="tab" onclick="window.app.showYouTubeTab('plan', event)">
                     <i class="fas fa-calendar-plus"></i> Zaplanuj
                 </button>
+                <button class="tab" onclick="window.app.showYouTubeTab('playlists', event)">
+                    <i class="fas fa-list"></i> Playlisty
+                </button>
             </div>
 
             <!-- Search Tab -->
@@ -674,6 +958,11 @@
                         <button class="search-button" onclick="window.app.searchYouTube()">
                             <i class="fas fa-search"></i>
                         </button>
+                    </div>
+
+                    <div class="search-status-yt" id="youtubeSearchStatus" style="display: none;">
+                        <div class="search-spinner"></div>
+                        <span>Wyszukiwanie YouTube TimerHub...</span>
                     </div>
 
                     <div id="searchResults" class="search-results"></div>
@@ -751,6 +1040,21 @@
                     </form>
                 </div>
             </div>
+
+            <!-- Playlists Tab -->
+            <div id="playlistsTab" class="tab-content" style="display: none;">
+                <div class="playlists-section glass-card">
+                    <div class="playlists-header">
+                        <h3>Moje playlisty</h3>
+                        <button class="add-playlist-btn gradient-btn" onclick="window.app.createPlaylist()">
+                            <i class="fas fa-plus-circle"></i> Nowa playlista
+                        </button>
+                    </div>
+                    <div id="playlistsList" class="playlists-container">
+                        <p class="empty-state">Brak playlist</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Timer Display -->
@@ -798,6 +1102,9 @@
                 </div>
 
                 <div class="timer-actions">
+                    <button class="timer-action-btn" onclick="window.app.openNotesForTimer()">
+                        <i class="fas fa-sticky-note"></i> Notatki
+                    </button>
                     <button class="timer-action-btn" id="pauseBtn" onclick="window.app.togglePause()">
                         <i class="fas fa-pause"></i> Pauza
                     </button>
@@ -817,6 +1124,31 @@
             </div>
         </div>
 
+        <!-- Pomodoro Timer -->
+        <div id="pomodoroTimer" class="pomodoro-timer" style="display: none;">
+            <div class="pomodoro-content">
+                <h3>Tryb Pomodoro</h3>
+                <div class="pomodoro-display">
+                    <span id="pomodoroMinutes">25</span>:<span id="pomodoroSeconds">00</span>
+                </div>
+                <div class="pomodoro-status" id="pomodoroStatus">Czas pracy</div>
+                <div class="pomodoro-actions">
+                    <button onclick="window.app.togglePomodoroPause()">
+                        <i class="fas fa-pause"></i>
+                    </button>
+                    <button onclick="window.app.skipPomodoroSession()">
+                        <i class="fas fa-forward"></i>
+                    </button>
+                    <button onclick="window.app.stopPomodoro()">
+                        <i class="fas fa-stop"></i>
+                    </button>
+                </div>
+                <div class="pomodoro-stats">
+                    <span>Sesje: <strong id="pomodoroSessions">0</strong></span>
+                </div>
+            </div>
+        </div>
+
         <!-- Notifications -->
         <div id="notifications" class="notifications"></div>
     </div>
@@ -825,7 +1157,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, signInWithCredential, GoogleAuthProvider, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getDatabase, ref, set, get, onValue, push, serverTimestamp, onDisconnect, remove, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getDatabase, ref, set, get, onValue, push, serverTimestamp, onDisconnect, remove, query, orderByChild, limitToLast, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
         // Your web app's Firebase configuration
         const firebaseConfig = {
@@ -862,7 +1194,8 @@
             query,
             orderByChild,
             limitToLast,
-            signInAnonymously  // This is the function, not auth.signInAnonymously
+            signInAnonymously,
+            update
         };
 
         console.log('Firebase initialized successfully');

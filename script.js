@@ -1,4 +1,4 @@
-// Timer Hub Application with Firebase Integration
+// Timer Hub Application with Enhanced Features
 class TimerHub {
     constructor() {
         this.currentTimer = null;
@@ -23,9 +23,31 @@ class TimerHub {
         this.selectedMessageId = null;
         this.currentPrivateChat = null;
         this.onlineUsers = {};
-        this.allUsers = {}; // Store all users that have been online
-        this.processedUsers = new Set(); // Track processed users to avoid duplicates
-        this.customAvatar = null; // Store custom avatar selection
+        this.allUsers = {};
+        this.processedUsers = new Set();
+        this.customAvatar = null;
+        this.tags = {};
+        this.playlists = {};
+        this.notes = {};
+        this.currentNoteType = 'before';
+        this.recentActivity = [];
+        this.searchHistory = [];
+        this.typingTimeout = null;
+        this.typingUsers = {};
+        this.pomodoroTimer = null;
+        this.pomodoroInterval = null;
+        this.pomodoroSessions = 0;
+        this.isWorkSession = true;
+        this.autoBreakTimeout = null;
+        this.aiMessages = [];
+        this.notificationSounds = {
+            default: 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBz+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFK3/K8N+SUgslUqPc79qtWxULN3y718m7cisgBCl6w+vap1oWCjpzuebOrWIbByNzv+vest...',
+            bell: 'data:audio/wav;base64,UklGRhYGAABXQVZFZm10IBAAAAABAAEAESsAABErAAABAAgAZGF0YfIFAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBz+a2vLDcyYELIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiS1/HMeS0GKnzJ8N+RUAsmUqPc79qtWxULN3y718m7cisgBCl6w+vap1oWCjpzuebOrWIbByNzv+vest...',
+            chime: 'data:audio/wav;base64,UklGRhQGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQ8GAABiYGRhVVNeaGJXS0hRXntqWkI5RFK7tnVNMTE0kt/epm0kDStVx/Xku2sdBzuY5fzSsSUEJXjP+eOILAUkeMrz5KNYKCpUnODyy5NWIBcwbMnm989sFQcnWqTd8tCHPhQoQ47k+eSfTBgmPHXA5v3zvmAYDj53qeP14qtOGClBeKrl/f/+6JJFGDNiodL49/bKfToVLlN6u+jy99CkWygeOl13vuLx99...',
+            pop: 'data:audio/wav;base64,UklGRjAGAABXQVZFZm10IBAAAAABAAEAESsAABErAAABAAgAZGF0YfwFAABhYWJjZGVmaGlqa2xtbnBxcnN0dXZ3eHl6e3x9fn6AgYKDhIWGiImKi4yNjo+QkZKTlJWWl5iZmpucnZ6foKGio6SlpqeoqaqrrK2ur7CxsrO0tba3uLm6u7y9vr/AwcLDxMXGx8jJysvMzc7P0NHS09TV1tfY2drb3N3e3+Dh4uPk5ebn6Onq6+zt7u/w8fLz9PX29/j5+vv8/f7/AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+fr7/P3+/w==',
+            none: null
+        };
+        this.debugMode = false;
         
         // Settings
         this.settings = {
@@ -44,7 +66,15 @@ class TimerHub {
             colorTheme: 'default',
             fontSize: 'normal',
             cardStyle: 'default',
-            compactMode: false
+            compactMode: false,
+            notificationSound: 'default',
+            enablePomodoro: false,
+            pomodoroWork: 25,
+            pomodoroBreak: 5,
+            enableAutoBreak: false,
+            enableAnalytics: true,
+            enableKeyboardShortcuts: true,
+            enableDarkModeSched: false
         };
         
         // Security measures
@@ -53,8 +83,17 @@ class TimerHub {
         // Load settings
         this.loadSettings();
         
+        // Initialize keyboard shortcuts
+        this.initKeyboardShortcuts();
+        
+        // Initialize analytics
+        this.initAnalytics();
+        
         // Wait for Firebase to be available
         this.waitForFirebase();
+        
+        // Check for dark mode schedule
+        this.checkDarkModeSchedule();
     }
     
     // Security initialization
@@ -101,12 +140,1437 @@ class TimerHub {
         }
     }
     
+    // Keyboard Shortcuts
+    initKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            if (!this.settings.enableKeyboardShortcuts) return;
+            
+            // Ctrl/Cmd + K - Open search
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                this.openSearch();
+            }
+            
+            // Ctrl/Cmd + Shift + K - Open AI Assistant
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'K') {
+                e.preventDefault();
+                this.openAIAssistant();
+            }
+            
+            // Alt + T - Toggle theme
+            if (e.altKey && e.key === 't') {
+                e.preventDefault();
+                this.toggleTheme();
+            }
+            
+            // Alt + C - Toggle chat
+            if (e.altKey && e.key === 'c') {
+                e.preventDefault();
+                this.toggleChat();
+            }
+            
+            // Alt + S - Toggle settings
+            if (e.altKey && e.key === 's') {
+                e.preventDefault();
+                this.toggleSettings();
+            }
+            
+            // Escape - Close modals
+            if (e.key === 'Escape') {
+                this.closeAllModals();
+            }
+        });
+    }
+    
+    showKeyboardShortcuts() {
+        const shortcuts = [
+            { key: 'Ctrl/Cmd + K', action: 'Otwórz wyszukiwanie' },
+            { key: 'Ctrl/Cmd + Shift + K', action: 'Otwórz asystenta AI' },
+            { key: 'Alt + T', action: 'Zmień motyw' },
+            { key: 'Alt + C', action: 'Pokaż/ukryj czat' },
+            { key: 'Alt + S', action: 'Pokaż/ukryj ustawienia' },
+            { key: 'Escape', action: 'Zamknij okna dialogowe' }
+        ];
+        
+        const content = `
+            <div class="shortcuts-list">
+                ${shortcuts.map(s => `
+                    <div class="shortcut-item">
+                        <span>${s.action}</span>
+                        <span class="shortcut-key">${s.key}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        
+        this.showModal('Skróty klawiszowe', content, 'shortcuts-modal');
+    }
+    
+    // Analytics
+    initAnalytics() {
+        if (!this.settings.enableAnalytics) return;
+        
+        // Track page views
+        this.trackEvent('page_view', {
+            page: window.location.pathname,
+            timestamp: new Date().toISOString()
+        });
+        
+        // Track session start
+        this.trackEvent('session_start', {
+            timestamp: new Date().toISOString()
+        });
+    }
+    
+    trackEvent(eventName, data = {}) {
+        if (!this.settings.enableAnalytics) return;
+        
+        const event = {
+            name: eventName,
+            data: data,
+            timestamp: new Date().toISOString(),
+            user: this.currentUser?.email || 'anonymous'
+        };
+        
+        // Store locally
+        const analytics = this.loadFromStorage('analytics') || [];
+        analytics.push(event);
+        
+        // Keep only last 1000 events
+        if (analytics.length > 1000) {
+            analytics.splice(0, analytics.length - 1000);
+        }
+        
+        this.saveToStorage('analytics', analytics);
+        
+        if (this.debugMode) {
+            console.log('Analytics Event:', event);
+        }
+    }
+    
+    // Search functionality
+    openSearch() {
+        document.getElementById('searchOverlay').classList.add('active');
+        document.getElementById('universalSearch').focus();
+        
+        this.trackEvent('search_opened');
+    }
+    
+    closeSearch() {
+        document.getElementById('searchOverlay').classList.remove('active');
+        document.getElementById('universalSearch').value = '';
+        document.getElementById('searchResults').innerHTML = '';
+        document.getElementById('searchStatus').style.display = 'none';
+    }
+    
+    async performSearch(query) {
+        if (!query || query.length < 2) {
+            document.getElementById('searchResults').innerHTML = '';
+            return;
+        }
+        
+        // Show search status
+        document.getElementById('searchStatus').style.display = 'flex';
+        
+        // Simulate search delay
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        const results = [];
+        
+        // Search meetings
+        this.meetings.forEach(meeting => {
+            if (meeting.title.toLowerCase().includes(query.toLowerCase())) {
+                results.push({
+                    type: 'meeting',
+                    icon: 'fa-users',
+                    title: meeting.title,
+                    meta: `Spotkanie - ${new Date(meeting.dateTime).toLocaleDateString(this.settings.region)}`,
+                    data: meeting
+                });
+            }
+        });
+        
+        // Search favorite channels
+        Object.entries(this.favoriteChannels).forEach(([id, channel]) => {
+            if (channel.name.toLowerCase().includes(query.toLowerCase())) {
+                results.push({
+                    type: 'channel',
+                    icon: 'fa-tv',
+                    title: channel.name,
+                    meta: 'Ulubiony kanał YouTube',
+                    data: { id, ...channel }
+                });
+            }
+        });
+        
+        // Search watch history
+        this.watchHistory.forEach(video => {
+            if (video.title.toLowerCase().includes(query.toLowerCase())) {
+                results.push({
+                    type: 'video',
+                    icon: 'fa-play-circle',
+                    title: video.title,
+                    meta: `Obejrzane - ${new Date(video.watchedAt).toLocaleDateString(this.settings.region)}`,
+                    data: video
+                });
+            }
+        });
+        
+        // Search tags
+        Object.entries(this.tags).forEach(([name, tag]) => {
+            if (name.toLowerCase().includes(query.toLowerCase())) {
+                results.push({
+                    type: 'tag',
+                    icon: 'fa-tag',
+                    title: name,
+                    meta: 'Tag',
+                    data: tag
+                });
+            }
+        });
+        
+        // Hide search status
+        document.getElementById('searchStatus').style.display = 'none';
+        
+        // Display results
+        this.displaySearchResults(results, query);
+        
+        // Add to search history
+        this.addToSearchHistory(query);
+        
+        // Track search
+        this.trackEvent('search_performed', { query, resultsCount: results.length });
+    }
+    
+    displaySearchResults(results, query) {
+        const container = document.getElementById('searchResults');
+        
+        if (results.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <p>Brak wyników dla "${this.escapeHtml(query)}"</p>
+                    <p class="text-muted">Spróbuj innych słów kluczowych</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = `
+            <div class="search-results-header">
+                <span>Znaleziono ${results.length} wyników dla "${this.escapeHtml(query)}"</span>
+                <span class="text-muted">Wyszukiwanie TimerHub</span>
+            </div>
+            ${results.map(result => `
+                <div class="search-result-item" onclick="window.app.handleSearchResultClick('${result.type}', ${JSON.stringify(result.data).replace(/"/g, '&quot;')})">
+                    <div class="search-result-icon">
+                        <i class="fas ${result.icon}"></i>
+                    </div>
+                    <div class="search-result-content">
+                        <div class="search-result-title">${this.highlightSearchTerm(result.title, query)}</div>
+                        <div class="search-result-meta">${result.meta}</div>
+                    </div>
+                </div>
+            `).join('')}
+        `;
+    }
+    
+    highlightSearchTerm(text, term) {
+        const regex = new RegExp(`(${term})`, 'gi');
+        return text.replace(regex, '<mark>$1</mark>');
+    }
+    
+    handleSearchResultClick(type, data) {
+        this.closeSearch();
+        
+        switch (type) {
+            case 'meeting':
+                this.showTeamsMode();
+                this.showTeamsTab('upcoming');
+                // Highlight the meeting
+                setTimeout(() => {
+                    const element = document.querySelector(`[data-meeting-id="${data.id}"]`);
+                    if (element) {
+                        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        element.classList.add('highlight');
+                        setTimeout(() => element.classList.remove('highlight'), 2000);
+                    }
+                }, 300);
+                break;
+                
+            case 'channel':
+                this.showYouTubeMode();
+                this.showYouTubeTab('favorites');
+                break;
+                
+            case 'video':
+                window.open(data.url, '_blank');
+                break;
+                
+            case 'tag':
+                this.showTeamsMode();
+                this.showTeamsTab('tags');
+                break;
+        }
+    }
+    
+    addToSearchHistory(query) {
+        if (!this.searchHistory.includes(query)) {
+            this.searchHistory.unshift(query);
+            if (this.searchHistory.length > 10) {
+                this.searchHistory.pop();
+            }
+            this.saveToStorage('searchHistory', this.searchHistory);
+        }
+    }
+    
+    // AI Assistant
+    openAIAssistant() {
+        document.getElementById('aiAssistant').classList.add('active');
+        document.getElementById('aiInput').focus();
+        
+        if (this.aiMessages.length === 0) {
+            this.addAIMessage('Cześć! Jestem asystentem TimerHub. Mogę pomóc Ci w:', 'assistant');
+            setTimeout(() => {
+                this.addAIMessage('• Zarządzaniu spotkaniami i timerami\n• Wyszukiwaniu filmów na YouTube\n• Organizacji czasu pracy\n• Ustawieniach aplikacji\n\nJak mogę Ci pomóc?', 'assistant');
+            }, 500);
+        }
+        
+        this.trackEvent('ai_assistant_opened');
+    }
+    
+    closeAIAssistant() {
+        document.getElementById('aiAssistant').classList.remove('active');
+    }
+    
+    async sendAIMessage() {
+        const input = document.getElementById('aiInput');
+        const message = input.value.trim();
+        
+        if (!message) return;
+        
+        input.value = '';
+        this.addAIMessage(message, 'user');
+        
+        // Show thinking indicator
+        const thinkingId = this.addAIMessage('<div class="ai-thinking">Myślę</div>', 'assistant');
+        
+        // Process message
+        const response = await this.processAIMessage(message);
+        
+        // Remove thinking indicator and add response
+        this.removeAIMessage(thinkingId);
+        this.addAIMessage(response, 'assistant');
+        
+        this.trackEvent('ai_message_sent', { message });
+    }
+    
+    addAIMessage(content, type) {
+        const messageId = Date.now();
+        const message = { id: messageId, content, type };
+        this.aiMessages.push(message);
+        
+        const container = document.getElementById('aiMessages');
+        const messageElement = document.createElement('div');
+        messageElement.className = `ai-message ${type}`;
+        messageElement.dataset.messageId = messageId;
+        messageElement.innerHTML = content;
+        
+        container.appendChild(messageElement);
+        container.scrollTop = container.scrollHeight;
+        
+        return messageId;
+    }
+    
+    removeAIMessage(messageId) {
+        this.aiMessages = this.aiMessages.filter(m => m.id !== messageId);
+        const element = document.querySelector(`[data-message-id="${messageId}"]`);
+        if (element) element.remove();
+    }
+    
+    async processAIMessage(message) {
+        // Simulate AI processing
+        await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
+        
+        const lowerMessage = message.toLowerCase();
+        
+        // Meeting related
+        if (lowerMessage.includes('spotkanie') || lowerMessage.includes('meeting')) {
+            if (lowerMessage.includes('dodaj') || lowerMessage.includes('nowe')) {
+                return 'Aby dodać nowe spotkanie:\n1. Przejdź do sekcji Microsoft Teams\n2. Kliknij zakładkę "Nowe spotkanie"\n3. Wypełnij formularz i kliknij "Rozpocznij odliczanie"\n\nCzy chcesz, żebym otworzył tę sekcję?';
+            } else if (lowerMessage.includes('najbliższe') || lowerMessage.includes('następne')) {
+                const upcoming = this.getUpcomingMeetings();
+                if (upcoming.length === 0) {
+                    return 'Nie masz żadnych zaplanowanych spotkań.';
+                }
+                const next = upcoming[0];
+                const date = new Date(next.dateTime);
+                return `Twoje następne spotkanie:\n📅 ${next.title}\n🕐 ${date.toLocaleDateString(this.settings.region)} o ${date.toLocaleTimeString(this.settings.region, {hour: '2-digit', minute: '2-digit'})}`;
+            }
+        }
+        
+        // YouTube related
+        if (lowerMessage.includes('youtube') || lowerMessage.includes('film')) {
+            if (lowerMessage.includes('szukaj') || lowerMessage.includes('znajdź')) {
+                return 'Mogę pomóc Ci znaleźć filmy na YouTube:\n1. Przejdź do sekcji YouTube\n2. Użyj zakładki "Wyszukaj"\n3. Wpisz szukaną frazę\n\nJakich filmów szukasz?';
+            }
+        }
+        
+        // Timer related
+        if (lowerMessage.includes('timer') || lowerMessage.includes('czas')) {
+            if (this.currentTimer) {
+                return 'Masz aktywny timer. Czy chcesz go zatrzymać lub sprawdzić status?';
+            } else {
+                return 'Nie masz aktywnego timera. Możesz ustawić timer dla:\n• Spotkania Teams\n• Filmu YouTube\n• Sesji Pomodoro\n\nCo chcesz zaplanować?';
+            }
+        }
+        
+        // Pomodoro
+        if (lowerMessage.includes('pomodoro')) {
+            return 'Technika Pomodoro to metoda zarządzania czasem:\n• 25 minut pracy\n• 5 minut przerwy\n• Po 4 sesjach dłuższa przerwa\n\nChcesz rozpocząć sesję Pomodoro?';
+        }
+        
+        // Settings
+        if (lowerMessage.includes('ustawienia') || lowerMessage.includes('zmień')) {
+            return 'Możesz zmienić wiele ustawień:\n• Motyw kolorystyczny\n• Rozmiar czcionki\n• Powiadomienia\n• Region i język\n\nOtwórz ustawienia klikając ikonę ⚙️ w prawym górnym rogu.';
+        }
+        
+        // Help
+        if (lowerMessage.includes('pomoc') || lowerMessage.includes('help')) {
+            return 'Oto główne funkcje TimerHub:\n\n🎯 **Spotkania Teams**\n• Planuj i zarządzaj spotkaniami\n• Automatyczne przypomnienia\n• Historia spotkań\n\n📺 **YouTube**\n• Wyszukuj filmy i kanały\n• Zapisuj ulubione\n• Planuj oglądanie\n\n⏱️ **Timery**\n• Odliczanie do wydarzeń\n• Tryb Pomodoro\n• Automatyczne przerwy\n\n💬 **Czat**\n• Rozmawiaj z innymi użytkownikami\n• Prywatne wiadomości\n\nCzego dokładnie potrzebujesz?';
+        }
+        
+        // Default response
+        return 'Nie jestem pewien, jak mogę pomóc w tym przypadku. Spróbuj zapytać o:\n• Dodawanie spotkań\n• Wyszukiwanie filmów\n• Ustawienia aplikacji\n• Technikę Pomodoro\n• Ogólną pomoc';
+    }
+    
+    // Notes functionality
+    openNotesForTimer() {
+        if (!this.currentTimer) return;
+        
+        const modalTitle = `Notatki - ${this.currentTimer.title}`;
+        document.getElementById('notesTitle').textContent = modalTitle;
+        document.getElementById('notesModal').classList.add('active');
+        
+        // Load existing notes
+        const noteKey = `timer_${this.currentTimer.type}_${this.currentTimer.startTime.getTime()}`;
+        const existingNotes = this.notes[noteKey] || { before: '', during: '', after: '' };
+        
+        this.currentNoteType = 'during'; // Default to during for active timer
+        this.switchNoteTab('during');
+        document.getElementById('notesTextarea').value = existingNotes.during || '';
+    }
+    
+    closeNotesModal() {
+        document.getElementById('notesModal').classList.remove('active');
+    }
+    
+    switchNoteTab(type) {
+        this.currentNoteType = type;
+        
+        // Update tabs
+        document.querySelectorAll('.note-tab').forEach(tab => tab.classList.remove('active'));
+        event.target.classList.add('active');
+        
+        // Load content for selected tab
+        if (this.currentTimer) {
+            const noteKey = `timer_${this.currentTimer.type}_${this.currentTimer.startTime.getTime()}`;
+            const existingNotes = this.notes[noteKey] || { before: '', during: '', after: '' };
+            document.getElementById('notesTextarea').value = existingNotes[type] || '';
+        }
+    }
+    
+    saveNotes() {
+        if (!this.currentTimer) return;
+        
+        const noteKey = `timer_${this.currentTimer.type}_${this.currentTimer.startTime.getTime()}`;
+        const content = document.getElementById('notesTextarea').value;
+        
+        if (!this.notes[noteKey]) {
+            this.notes[noteKey] = { before: '', during: '', after: '' };
+        }
+        
+        this.notes[noteKey][this.currentNoteType] = content;
+        this.saveToStorage('notes', this.notes);
+        
+        this.showNotification('Notatki zapisane!', 'success');
+    }
+    
+    exportNotes() {
+        if (!this.currentTimer) return;
+        
+        const noteKey = `timer_${this.currentTimer.type}_${this.currentTimer.startTime.getTime()}`;
+        const notes = this.notes[noteKey] || { before: '', during: '', after: '' };
+        
+        const content = `# Notatki - ${this.currentTimer.title}
+Data: ${new Date().toLocaleDateString(this.settings.region)}
+
+## Przed spotkaniem
+${notes.before || 'Brak notatek'}
+
+## Podczas spotkania
+${notes.during || 'Brak notatek'}
+
+## Po spotkaniu
+${notes.after || 'Brak notatek'}
+`;
+        
+        const blob = new Blob([content], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `notatki-${this.currentTimer.title.replace(/[^a-z0-9]/gi, '_')}-${new Date().toISOString().split('T')[0]}.md`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        this.showNotification('Notatki wyeksportowane!', 'success');
+    }
+    
+    // Tags functionality
+    addNewTag() {
+        const name = document.getElementById('newTagInput').value.trim();
+        const color = document.getElementById('newTagColor').value;
+        
+        if (!name) {
+            this.showNotification('Podaj nazwę tagu', 'warning');
+            return;
+        }
+        
+        if (this.tags[name]) {
+            this.showNotification('Tag już istnieje', 'warning');
+            return;
+        }
+        
+        this.tags[name] = {
+            color,
+            createdAt: new Date().toISOString(),
+            usageCount: 0
+        };
+        
+        this.saveToStorage('tags', this.tags);
+        this.displayTags();
+        
+        // Clear inputs
+        document.getElementById('newTagInput').value = '';
+        document.getElementById('newTagColor').value = '#6366f1';
+        
+        this.showNotification('Tag dodany!', 'success');
+    }
+    
+    displayTags() {
+        const container = document.getElementById('tagsList');
+        const tags = Object.entries(this.tags);
+        
+        if (tags.length === 0) {
+            container.innerHTML = '<p class="empty-state">Brak tagów</p>';
+            return;
+        }
+        
+        container.innerHTML = tags.map(([name, tag]) => `
+            <span class="tag-item" style="background: ${tag.color}; color: ${this.getContrastColor(tag.color)}">
+                ${this.escapeHtml(name)}
+                <button class="tag-delete" onclick="window.app.deleteTag('${name}')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </span>
+        `).join('');
+    }
+    
+    deleteTag(name) {
+        if (confirm(`Czy na pewno chcesz usunąć tag "${name}"?`)) {
+            delete this.tags[name];
+            this.saveToStorage('tags', this.tags);
+            this.displayTags();
+            this.showNotification('Tag usunięty', 'success');
+        }
+    }
+    
+    getContrastColor(hexColor) {
+        // Convert hex to RGB
+        const r = parseInt(hexColor.slice(1, 3), 16);
+        const g = parseInt(hexColor.slice(3, 5), 16);
+        const b = parseInt(hexColor.slice(5, 7), 16);
+        
+        // Calculate luminance
+        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        
+        return luminance > 0.5 ? '#000000' : '#ffffff';
+    }
+    
+    // Playlists functionality
+    createPlaylist() {
+        const name = prompt('Nazwa playlisty:');
+        if (!name) return;
+        
+        const playlistId = 'playlist_' + Date.now();
+        this.playlists[playlistId] = {
+            name,
+            videos: [],
+            createdAt: new Date().toISOString()
+        };
+        
+        this.saveToStorage('playlists', this.playlists);
+        this.displayPlaylists();
+        this.showNotification('Playlista utworzona!', 'success');
+    }
+    
+    displayPlaylists() {
+        const container = document.getElementById('playlistsList');
+        const playlists = Object.entries(this.playlists);
+        
+        if (playlists.length === 0) {
+            container.innerHTML = '<p class="empty-state">Brak playlist</p>';
+            return;
+        }
+        
+        container.innerHTML = playlists.map(([id, playlist]) => `
+            <div class="playlist-card" onclick="window.app.openPlaylist('${id}')">
+                <div class="playlist-header">
+                    <h4 class="playlist-title">${this.escapeHtml(playlist.name)}</h4>
+                    <button onclick="event.stopPropagation(); window.app.deletePlaylist('${id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+                <div class="playlist-count">${playlist.videos.length} filmów</div>
+                <div class="playlist-videos">
+                    ${playlist.videos.slice(0, 3).map(v => `
+                        <div class="playlist-video">${this.escapeHtml(v.title)}</div>
+                    `).join('')}
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    openPlaylist(playlistId) {
+        const playlist = this.playlists[playlistId];
+        if (!playlist) return;
+        
+        // TODO: Implement playlist view
+        this.showNotification('Otwieranie playlisty...', 'info');
+    }
+    
+    deletePlaylist(playlistId) {
+        const playlist = this.playlists[playlistId];
+        if (confirm(`Czy na pewno chcesz usunąć playlistę "${playlist.name}"?`)) {
+            delete this.playlists[playlistId];
+            this.saveToStorage('playlists', this.playlists);
+            this.displayPlaylists();
+            this.showNotification('Playlista usunięta', 'success');
+        }
+    }
+    
+    // Pomodoro functionality
+    startPomodoro() {
+        if (this.pomodoroTimer) {
+            this.showNotification('Pomodoro jest już aktywne', 'warning');
+            return;
+        }
+        
+        this.pomodoroTimer = {
+            duration: this.settings.pomodoroWork * 60,
+            remaining: this.settings.pomodoroWork * 60,
+            isPaused: false
+        };
+        
+        document.getElementById('pomodoroTimer').style.display = 'block';
+        this.updatePomodoroDisplay();
+        
+        this.pomodoroInterval = setInterval(() => {
+            if (!this.pomodoroTimer.isPaused && this.pomodoroTimer.remaining > 0) {
+                this.pomodoroTimer.remaining--;
+                this.updatePomodoroDisplay();
+                
+                if (this.pomodoroTimer.remaining === 0) {
+                    this.completePomodoroSession();
+                }
+            }
+        }, 1000);
+        
+        this.showNotification('Pomodoro rozpoczęte!', 'success');
+        this.trackEvent('pomodoro_started');
+    }
+    
+    updatePomodoroDisplay() {
+        const minutes = Math.floor(this.pomodoroTimer.remaining / 60);
+        const seconds = this.pomodoroTimer.remaining % 60;
+        
+        document.getElementById('pomodoroMinutes').textContent = String(minutes).padStart(2, '0');
+        document.getElementById('pomodoroSeconds').textContent = String(seconds).padStart(2, '0');
+    }
+    
+    completePomodoroSession() {
+        clearInterval(this.pomodoroInterval);
+        
+        if (this.isWorkSession) {
+            this.pomodoroSessions++;
+            document.getElementById('pomodoroSessions').textContent = this.pomodoroSessions;
+            
+            // Play notification sound
+            this.playNotificationSound();
+            
+            // Show notification
+            this.showNotification('Czas na przerwę!', 'success');
+            
+            // Start break
+            this.isWorkSession = false;
+            document.getElementById('pomodoroStatus').textContent = 'Przerwa';
+            
+            this.pomodoroTimer = {
+                duration: this.settings.pomodoroBreak * 60,
+                remaining: this.settings.pomodoroBreak * 60,
+                isPaused: false
+            };
+            
+            this.pomodoroInterval = setInterval(() => {
+                if (!this.pomodoroTimer.isPaused && this.pomodoroTimer.remaining > 0) {
+                    this.pomodoroTimer.remaining--;
+                    this.updatePomodoroDisplay();
+                    
+                    if (this.pomodoroTimer.remaining === 0) {
+                        this.completePomodoroSession();
+                    }
+                }
+            }, 1000);
+        } else {
+            // Break finished
+            this.playNotificationSound();
+            this.showNotification('Przerwa zakończona! Czas wrócić do pracy.', 'info');
+            
+            this.isWorkSession = true;
+            document.getElementById('pomodoroStatus').textContent = 'Czas pracy';
+            
+            // Ask if continue
+            if (confirm('Czy chcesz kontynuować z kolejną sesją?')) {
+                this.startPomodoro();
+            } else {
+                this.stopPomodoro();
+            }
+        }
+    }
+    
+    togglePomodoroPause() {
+        if (!this.pomodoroTimer) return;
+        
+        this.pomodoroTimer.isPaused = !this.pomodoroTimer.isPaused;
+        
+        const button = event.target.closest('button');
+        if (this.pomodoroTimer.isPaused) {
+            button.innerHTML = '<i class="fas fa-play"></i>';
+            this.showNotification('Pomodoro wstrzymane', 'info');
+        } else {
+            button.innerHTML = '<i class="fas fa-pause"></i>';
+            this.showNotification('Pomodoro wznowione', 'info');
+        }
+    }
+    
+    skipPomodoroSession() {
+        if (!this.pomodoroTimer) return;
+        
+        if (confirm('Czy na pewno chcesz pominąć tę sesję?')) {
+            this.pomodoroTimer.remaining = 0;
+        }
+    }
+    
+    stopPomodoro() {
+        if (this.pomodoroInterval) {
+            clearInterval(this.pomodoroInterval);
+        }
+        
+        this.pomodoroTimer = null;
+        this.pomodoroInterval = null;
+        document.getElementById('pomodoroTimer').style.display = 'none';
+        
+        this.showNotification('Pomodoro zatrzymane', 'info');
+        this.trackEvent('pomodoro_stopped', { sessions: this.pomodoroSessions });
+    }
+    
+    // Quick timer
+    startQuickTimer() {
+        const minutes = prompt('Na ile minut ustawić timer?', '25');
+        if (!minutes || isNaN(minutes)) return;
+        
+        const duration = parseInt(minutes);
+        const startTime = new Date();
+        const endTime = new Date(startTime.getTime() + duration * 60000);
+        
+        this.startTimer('quick', startTime, duration, null, false, `Szybki timer (${duration} min)`);
+        this.showNotification(`Timer ustawiony na ${duration} minut`, 'success');
+    }
+    
+    // Recent activity
+    addToRecentActivity(type, title, icon = 'fa-clock') {
+        const activity = {
+            type,
+            title,
+            icon,
+            timestamp: new Date().toISOString()
+        };
+        
+        this.recentActivity.unshift(activity);
+        if (this.recentActivity.length > 10) {
+            this.recentActivity.pop();
+        }
+        
+        this.saveToStorage('recentActivity', this.recentActivity);
+        this.displayRecentActivity();
+    }
+    
+    displayRecentActivity() {
+        const container = document.getElementById('recentActivityList');
+        
+        if (this.recentActivity.length === 0) {
+            container.innerHTML = '<p class="empty-state">Brak ostatniej aktywności</p>';
+            return;
+        }
+        
+        container.innerHTML = this.recentActivity.map(activity => {
+            const date = new Date(activity.timestamp);
+            const timeAgo = this.getTimeAgo(date);
+            
+            return `
+                <div class="activity-item">
+                    <div class="activity-icon">
+                        <i class="fas ${activity.icon}"></i>
+                    </div>
+                    <div class="activity-content">
+                        <div>${this.escapeHtml(activity.title)}</div>
+                        <div class="activity-time">${timeAgo}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    getTimeAgo(date) {
+        const seconds = Math.floor((new Date() - date) / 1000);
+        
+        if (seconds < 60) return 'Przed chwilą';
+        if (seconds < 3600) return `${Math.floor(seconds / 60)} min temu`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)} godz. temu`;
+        if (seconds < 604800) return `${Math.floor(seconds / 86400)} dni temu`;
+        
+        return date.toLocaleDateString(this.settings.region);
+    }
+    
+    // Filters
+    filterMeetings() {
+        const searchQuery = document.getElementById('meetingsSearch').value.toLowerCase();
+        const filterType = document.getElementById('meetingsFilter').value;
+        
+        let filtered = this.meetings;
+        
+        // Search filter
+        if (searchQuery) {
+            filtered = filtered.filter(meeting => 
+                meeting.title.toLowerCase().includes(searchQuery) ||
+                meeting.link.toLowerCase().includes(searchQuery)
+            );
+        }
+        
+        // Date filter
+        const now = new Date();
+        switch (filterType) {
+            case 'today':
+                filtered = filtered.filter(m => {
+                    const date = new Date(m.dateTime);
+                    return date.toDateString() === now.toDateString();
+                });
+                break;
+            case 'week':
+                const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+                filtered = filtered.filter(m => {
+                    const date = new Date(m.dateTime);
+                    return date >= now && date <= weekFromNow;
+                });
+                break;
+            case 'month':
+                const monthFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+                filtered = filtered.filter(m => {
+                    const date = new Date(m.dateTime);
+                    return date >= now && date <= monthFromNow;
+                });
+                break;
+        }
+        
+        // Display filtered results
+        this.displayFilteredMeetings(filtered);
+    }
+    
+    displayFilteredMeetings(meetings) {
+        const container = document.getElementById('upcomingMeetings');
+        
+        if (meetings.length === 0) {
+            container.innerHTML = '<p class="empty-state">Brak spotkań spełniających kryteria</p>';
+            return;
+        }
+        
+        container.innerHTML = meetings.map(meeting => {
+            const meetingDate = new Date(meeting.dateTime);
+            const tags = meeting.tags ? meeting.tags.split(',').map(tag => tag.trim()) : [];
+            
+            return `
+                <div class="history-item" data-meeting-id="${meeting.id}">
+                    <div class="history-info">
+                        <h4>${this.escapeHtml(meeting.title)}</h4>
+                        <div class="history-meta">
+                            <span><i class="fas fa-calendar"></i> ${meetingDate.toLocaleDateString(this.settings.region)}</span>
+                            <span><i class="fas fa-clock"></i> ${meetingDate.toLocaleTimeString(this.settings.region, {hour: '2-digit', minute: '2-digit'})}</span>
+                            <span><i class="fas fa-hourglass"></i> ${meeting.duration} min</span>
+                        </div>
+                        ${tags.length > 0 ? `
+                            <div class="meeting-tags">
+                                ${tags.map(tag => `
+                                    <span class="tag-item" style="background: ${this.tags[tag]?.color || '#6366f1'}; color: ${this.getContrastColor(this.tags[tag]?.color || '#6366f1')}">
+                                        ${this.escapeHtml(tag)}
+                                    </span>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div class="history-actions">
+                        <button onclick="window.app.startMeetingTimer(${meeting.id})">
+                            <i class="fas fa-play"></i> Start
+                        </button>
+                        <button onclick="window.app.openNotesForMeeting(${meeting.id})">
+                            <i class="fas fa-sticky-note"></i>
+                        </button>
+                        <button onclick="window.app.deleteMeeting(${meeting.id})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    filterPrivateUsers() {
+        const query = document.getElementById('privateUsersSearch').value.toLowerCase();
+        
+        if (!query) {
+            this.updatePrivateUsersList();
+            return;
+        }
+        
+        const container = document.getElementById('privateUsersList');
+        const users = [];
+        
+        // Filter online users
+        Object.entries(this.onlineUsers).forEach(([userId, presence]) => {
+            if (userId !== this.firebaseUser?.uid && presence.user_info) {
+                const name = presence.user_info.name || 'Użytkownik';
+                if (name.toLowerCase().includes(query)) {
+                    users.push({
+                        userId,
+                        name,
+                        picture: presence.user_info.picture || 'https://ui-avatars.com/api/?name=User&background=6366f1&color=fff',
+                        isOnline: true
+                    });
+                }
+            }
+        });
+        
+        // Filter offline users
+        Object.entries(this.allUsers).forEach(([userId, userInfo]) => {
+            if (userId !== this.firebaseUser?.uid && !users.find(u => u.userId === userId)) {
+                const name = userInfo.name || 'Użytkownik';
+                if (name.toLowerCase().includes(query)) {
+                    users.push({
+                        userId,
+                        name,
+                        picture: userInfo.picture || 'https://ui-avatars.com/api/?name=User&background=6366f1&color=fff',
+                        isOnline: false
+                    });
+                }
+            }
+        });
+        
+        if (users.length === 0) {
+            container.innerHTML = '<p class="empty-state">Nie znaleziono użytkowników</p>';
+            return;
+        }
+        
+        container.innerHTML = users.map(user => {
+            const unreadCount = this.getUnreadPrivateMessages(user.userId);
+            
+            return `
+                <div class="private-user-item" onclick="window.app.openPrivateChat('${user.userId}', '${this.escapeHtml(user.name)}', '${user.picture}')">
+                    <img class="private-user-avatar" src="${user.picture}" alt="${this.escapeHtml(user.name)}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=6366f1&color=fff'">
+                    <div class="private-user-info">
+                        <div class="private-user-name">${this.escapeHtml(user.name)}</div>
+                        <div class="private-user-status ${user.isOnline ? 'online' : ''}">${user.isOnline ? 'Online' : 'Offline'}</div>
+                    </div>
+                    ${unreadCount > 0 ? `<span class="unread-count">${unreadCount}</span>` : ''}
+                </div>
+            `;
+        }).join('');
+    }
+    
+    // Chat enhancements
+    handleChatTyping() {
+        if (!this.firebaseUser) return;
+        
+        // Clear previous timeout
+        if (this.typingTimeout) {
+            clearTimeout(this.typingTimeout);
+        }
+        
+        // Send typing status
+        this.sendTypingStatus(true);
+        
+        // Clear typing after 3 seconds
+        this.typingTimeout = setTimeout(() => {
+            this.sendTypingStatus(false);
+        }, 3000);
+    }
+    
+    async sendTypingStatus(isTyping) {
+        if (!this.firebaseUser || !this.isFirebaseReady) return;
+        
+        try {
+            const typingRef = window.firebase.ref(window.firebase.database, `chat/typing/${this.firebaseUser.uid}`);
+            
+            if (isTyping) {
+                await window.firebase.set(typingRef, {
+                    userName: this.currentUser.name,
+                    timestamp: Date.now()
+                });
+            } else {
+                await window.firebase.remove(typingRef);
+            }
+        } catch (error) {
+            console.error('Error sending typing status:', error);
+        }
+    }
+    
+    listenToTypingStatus() {
+        if (!this.isFirebaseReady) return;
+        
+        const typingRef = window.firebase.ref(window.firebase.database, 'chat/typing');
+        
+        window.firebase.onValue(typingRef, (snapshot) => {
+            const typingUsers = [];
+            const now = Date.now();
+            
+            snapshot.forEach((childSnapshot) => {
+                const userId = childSnapshot.key;
+                const data = childSnapshot.val();
+                
+                // Show typing only for others and if recent (< 5 seconds)
+                if (userId !== this.firebaseUser?.uid && (now - data.timestamp) < 5000) {
+                    typingUsers.push(data.userName);
+                }
+            });
+            
+            this.updateTypingIndicator(typingUsers);
+        });
+    }
+    
+    updateTypingIndicator(typingUsers) {
+        const container = document.getElementById('chatTyping');
+        const text = document.getElementById('typingUsers');
+        
+        if (typingUsers.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+        
+        container.style.display = 'flex';
+        
+        if (typingUsers.length === 1) {
+            text.textContent = `${typingUsers[0]} pisze...`;
+        } else if (typingUsers.length === 2) {
+            text.textContent = `${typingUsers[0]} i ${typingUsers[1]} piszą...`;
+        } else {
+            text.textContent = `${typingUsers[0]} i ${typingUsers.length - 1} innych piszą...`;
+        }
+    }
+    
+    toggleEmojiPicker() {
+        const picker = document.getElementById('emojiPicker');
+        picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
+    }
+    
+    insertEmoji(emoji) {
+        const input = document.getElementById('chatInput');
+        input.value += emoji;
+        input.focus();
+        this.toggleEmojiPicker();
+    }
+    
+    replyToMessage() {
+        // TODO: Implement reply functionality
+        this.showNotification('Funkcja odpowiedzi będzie dostępna wkrótce', 'info');
+        document.getElementById('messageContextMenu').style.display = 'none';
+    }
+    
+    editMessage() {
+        // TODO: Implement edit functionality
+        this.showNotification('Funkcja edycji będzie dostępna wkrótce', 'info');
+        document.getElementById('messageContextMenu').style.display = 'none';
+    }
+    
+    // Settings enhancements
+    changeNotificationSound(sound) {
+        this.settings.notificationSound = sound;
+        this.saveSettings();
+        
+        // Test sound
+        if (sound !== 'none') {
+            this.playNotificationSound();
+        }
+    }
+    
+    playNotificationSound() {
+        if (this.settings.notificationSound === 'none') return;
+        
+        const soundData = this.notificationSounds[this.settings.notificationSound];
+        if (soundData) {
+            const audio = new Audio(soundData);
+            audio.volume = 0.5;
+            audio.play().catch(e => console.log('Could not play notification sound:', e));
+        }
+    }
+    
+    togglePomodoro() {
+        this.settings.enablePomodoro = document.getElementById('enablePomodoro').checked;
+        this.saveSettings();
+    }
+    
+    updatePomodoroSettings() {
+        this.settings.pomodoroWork = parseInt(document.getElementById('pomodoroWork').value);
+        this.settings.pomodoroBreak = parseInt(document.getElementById('pomodoroBreak').value);
+        this.saveSettings();
+    }
+    
+    toggleAutoBreak() {
+        this.settings.enableAutoBreak = document.getElementById('enableAutoBreak').checked;
+        this.saveSettings();
+        
+        if (this.settings.enableAutoBreak) {
+            this.scheduleAutoBreak();
+        } else {
+            this.cancelAutoBreak();
+        }
+    }
+    
+    scheduleAutoBreak() {
+        // Cancel existing timeout
+        this.cancelAutoBreak();
+        
+        // Schedule break after 2 hours
+        this.autoBreakTimeout = setTimeout(() => {
+            this.showNotification('Czas na przerwę! Pracujesz już 2 godziny.', 'warning');
+            this.startPomodoro(); // Start a break session
+        }, 2 * 60 * 60 * 1000);
+    }
+    
+    cancelAutoBreak() {
+        if (this.autoBreakTimeout) {
+            clearTimeout(this.autoBreakTimeout);
+            this.autoBreakTimeout = null;
+        }
+    }
+    
+    toggleAnalytics() {
+        this.settings.enableAnalytics = document.getElementById('enableAnalytics').checked;
+        this.saveSettings();
+        
+        if (!this.settings.enableAnalytics) {
+            // Clear existing analytics
+            localStorage.removeItem('analytics');
+            this.showNotification('Dane analityczne zostały wyłączone i usunięte', 'info');
+        }
+    }
+    
+    toggleKeyboardShortcuts() {
+        this.settings.enableKeyboardShortcuts = document.getElementById('enableKeyboardShortcuts').checked;
+        this.saveSettings();
+    }
+    
+    toggleDebugMode() {
+        this.debugMode = document.getElementById('enableDebugMode').checked;
+        
+        if (this.debugMode) {
+            console.log('Debug mode enabled');
+            console.log('Current state:', {
+                user: this.currentUser,
+                firebaseUser: this.firebaseUser,
+                settings: this.settings,
+                timers: this.currentTimer,
+                meetings: this.meetings.length,
+                watchHistory: this.watchHistory.length
+            });
+        }
+    }
+    
+    toggleDarkModeSchedule() {
+        this.settings.enableDarkModeSched = document.getElementById('enableDarkModeSched').checked;
+        this.saveSettings();
+        this.checkDarkModeSchedule();
+    }
+    
+    checkDarkModeSchedule() {
+        if (!this.settings.enableDarkModeSched) return;
+        
+        const now = new Date();
+        const hour = now.getHours();
+        
+        // Dark mode between 19:00 and 7:00
+        const shouldBeDark = hour >= 19 || hour < 7;
+        const isDark = !document.body.classList.contains('light-theme');
+        
+        if (shouldBeDark && !isDark) {
+            this.toggleTheme();
+        } else if (!shouldBeDark && isDark) {
+            this.toggleTheme();
+        }
+        
+        // Check again in 5 minutes
+        setTimeout(() => this.checkDarkModeSchedule(), 5 * 60 * 1000);
+    }
+    
+    async syncWithCloud() {
+        if (!this.firebaseUser || !this.isFirebaseReady) {
+            this.showNotification('Musisz być zalogowany do synchronizacji', 'warning');
+            return;
+        }
+        
+        try {
+            this.showNotification('Synchronizacja w toku...', 'info');
+            
+            await this.saveAllUserData();
+            await this.syncUserData();
+            
+            this.showNotification('Synchronizacja zakończona!', 'success');
+        } catch (error) {
+            console.error('Sync error:', error);
+            this.showNotification('Błąd synchronizacji', 'error');
+        }
+    }
+    
+    // Modal helper
+    showModal(title, content, className = '') {
+        const modal = document.createElement('div');
+        modal.className = `modal active ${className}`;
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>${title}</h3>
+                    <button class="modal-close" onclick="this.closest('.modal').remove()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    ${content}
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+    }
+    
+    closeAllModals() {
+        document.querySelectorAll('.modal.active').forEach(modal => {
+            modal.classList.remove('active');
+        });
+        
+        // Close other overlays
+        this.closeSearch();
+        this.closeAIAssistant();
+        
+        if (document.getElementById('globalChat').classList.contains('active')) {
+            this.toggleChat();
+        }
+        
+        if (document.getElementById('settingsPanel').classList.contains('active')) {
+            this.toggleSettings();
+        }
+    }
+    
+    // Calendar integration placeholder
+    showCalendarIntegration() {
+        this.showNotification('Integracja z kalendarzem będzie dostępna wkrótce!', 'info');
+    }
+    
+    // Stats placeholder
+    showStats() {
+        const totalMeetings = this.meetings.length + this.meetingsHistory.length;
+        const totalVideos = this.watchHistory.length;
+        const totalChannels = Object.keys(this.favoriteChannels).length;
+        const activeDays = this.calculateActiveDays();
+        
+        const content = `
+            <div class="stats-overview">
+                <div class="stat-item">
+                    <i class="fas fa-users"></i>
+                    <div>
+                        <div class="stat-value">${totalMeetings}</div>
+                        <div class="stat-label">Wszystkich spotkań</div>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <i class="fas fa-play-circle"></i>
+                    <div>
+                        <div class="stat-value">${totalVideos}</div>
+                        <div class="stat-label">Obejrzanych filmów</div>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <i class="fas fa-tv"></i>
+                    <div>
+                        <div class="stat-value">${totalChannels}</div>
+                        <div class="stat-label">Ulubionych kanałów</div>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <i class="fas fa-fire"></i>
+                    <div>
+                        <div class="stat-value">${activeDays}</div>
+                        <div class="stat-label">Dni aktywności</div>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top: 2rem; text-align: center;">
+                <p class="text-muted">Szczegółowe statystyki będą dostępne wkrótce!</p>
+            </div>
+        `;
+        
+        this.showModal('📊 Statystyki', content);
+    }
+    
+    calculateActiveDays() {
+        const activityDates = new Set();
+        
+        // Add meeting dates
+        this.meetings.forEach(m => {
+            activityDates.add(new Date(m.dateTime).toDateString());
+        });
+        
+        // Add watch history dates
+        this.watchHistory.forEach(w => {
+            activityDates.add(new Date(w.watchedAt).toDateString());
+        });
+        
+        return activityDates.size;
+    }
+    
+    // Update stats for main screen
+    updateStats() {
+        // Count today's meetings
+        const today = new Date().toDateString();
+        const todayMeetings = this.meetings.filter(m => 
+            new Date(m.dateTime).toDateString() === today
+        ).length;
+        
+        document.getElementById('totalMeetings').textContent = todayMeetings;
+        document.getElementById('totalVideos').textContent = this.watchHistory.length;
+        document.getElementById('favoriteChannels').textContent = Object.keys(this.favoriteChannels).length;
+        
+        // Calculate streak
+        const streak = this.calculateStreak();
+        document.getElementById('streakDays').textContent = streak;
+    }
+    
+    calculateStreak() {
+        const dates = [];
+        
+        // Collect all activity dates
+        this.meetings.forEach(m => dates.push(new Date(m.dateTime).toDateString()));
+        this.watchHistory.forEach(w => dates.push(new Date(w.watchedAt).toDateString()));
+        
+        // Sort unique dates
+        const uniqueDates = [...new Set(dates)].sort((a, b) => new Date(b) - new Date(a));
+        
+        if (uniqueDates.length === 0) return 0;
+        
+        let streak = 0;
+        const today = new Date();
+        let checkDate = new Date(today);
+        
+        // Check consecutive days
+        for (let i = 0; i < uniqueDates.length; i++) {
+            const activityDate = new Date(uniqueDates[i]);
+            const daysDiff = Math.floor((checkDate - activityDate) / (1000 * 60 * 60 * 24));
+            
+            if (daysDiff === 0 || daysDiff === 1) {
+                streak++;
+                checkDate = activityDate;
+            } else {
+                break;
+            }
+        }
+        
+        return streak;
+    }
+    
+    // Search improvements
+    async searchYouTube() {
+        const query = document.getElementById('youtubeSearch').value;
+        const searchType = document.querySelector('.search-type.active').dataset.type;
+        
+        if (!query) {
+            this.showNotification('Wpisz frazę do wyszukania', 'warning');
+            return;
+        }
+        
+        // Show search status
+        document.getElementById('youtubeSearchStatus').style.display = 'flex';
+        
+        // Simulate search
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Hide search status
+        document.getElementById('youtubeSearchStatus').style.display = 'none';
+        
+        // Add to search history
+        this.addToSearchHistory(query);
+        
+        // Redirect to YouTube
+        this.redirectToYouTube(query, searchType);
+        
+        // Clear search input
+        document.getElementById('youtubeSearch').value = '';
+        
+        // Track search
+        this.trackEvent('youtube_search', { query, type: searchType });
+    }
+    
+    getUpcomingMeetings() {
+        const now = new Date();
+        return this.meetings
+            .filter(m => new Date(m.dateTime) > now)
+            .sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+    }
+    
+    openNotesForMeeting(meetingId) {
+        const meeting = this.meetings.find(m => m.id === meetingId);
+        if (!meeting) return;
+        
+        // Create temporary timer object for notes
+        this.currentTimer = {
+            type: 'teams',
+            title: meeting.title,
+            startTime: new Date(meeting.dateTime)
+        };
+        
+        this.openNotesForTimer();
+    }
+    
+    // Load settings with new features
     loadSettings() {
         const savedSettings = localStorage.getItem('timerHubSettings');
         if (savedSettings) {
             this.settings = { ...this.settings, ...JSON.parse(savedSettings) };
             this.applySettings();
         }
+        
+        // Load other data
+        this.tags = this.loadFromStorage('tags') || {};
+        this.playlists = this.loadFromStorage('playlists') || {};
+        this.notes = this.loadFromStorage('notes') || {};
+        this.recentActivity = this.loadFromStorage('recentActivity') || [];
+        this.searchHistory = this.loadFromStorage('searchHistory') || [];
     }
     
     saveSettings() {
@@ -155,6 +1619,7 @@ class TimerHub {
         document.getElementById('enableChatNotifications').checked = this.settings.chatNotifications;
         document.getElementById('enableTimerNotifications').checked = this.settings.timerNotifications;
         document.getElementById('enablePushNotifications').checked = this.settings.pushNotifications;
+        document.getElementById('notificationSound').value = this.settings.notificationSound;
         document.getElementById('regionSelect').value = this.settings.region;
         document.getElementById('timeFormat').value = this.settings.timeFormat;
         document.getElementById('deviceOptimization').value = this.settings.deviceOptimization;
@@ -166,6 +1631,13 @@ class TimerHub {
         document.getElementById('fontSize').value = this.settings.fontSize;
         document.getElementById('cardStyle').value = this.settings.cardStyle;
         document.getElementById('enableCompactMode').checked = this.settings.compactMode;
+        document.getElementById('enablePomodoro').checked = this.settings.enablePomodoro;
+        document.getElementById('pomodoroWork').value = this.settings.pomodoroWork;
+        document.getElementById('pomodoroBreak').value = this.settings.pomodoroBreak;
+        document.getElementById('enableAutoBreak').checked = this.settings.enableAutoBreak;
+        document.getElementById('enableAnalytics').checked = this.settings.enableAnalytics;
+        document.getElementById('enableKeyboardShortcuts').checked = this.settings.enableKeyboardShortcuts;
+        document.getElementById('enableDarkModeSched').checked = this.settings.enableDarkModeSched;
     }
     
     // Avatar management
@@ -396,7 +1868,12 @@ class TimerHub {
             meetingsHistory: this.meetingsHistory,
             favoriteMeetings: this.favoriteMeetings,
             settings: this.settings,
-            exportDate: new Date().toISOString()
+            tags: this.tags,
+            playlists: this.playlists,
+            notes: this.notes,
+            recentActivity: this.recentActivity,
+            exportDate: new Date().toISOString(),
+            version: '2.0'
         };
         
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -410,6 +1887,7 @@ class TimerHub {
         URL.revokeObjectURL(url);
         
         this.showNotification('Dane wyeksportowane pomyślnie', 'success');
+        this.trackEvent('data_exported');
     }
     
     importData() {
@@ -437,10 +1915,18 @@ class TimerHub {
                     this.meetingsHistory = data.meetingsHistory || [];
                     this.favoriteMeetings = data.favoriteMeetings || [];
                     this.settings = { ...this.settings, ...(data.settings || {}) };
+                    this.tags = data.tags || {};
+                    this.playlists = data.playlists || {};
+                    this.notes = data.notes || {};
+                    this.recentActivity = data.recentActivity || [];
                     
                     // Save all data
                     await this.saveAllUserData();
                     this.saveSettings();
+                    this.saveToStorage('tags', this.tags);
+                    this.saveToStorage('playlists', this.playlists);
+                    this.saveToStorage('notes', this.notes);
+                    this.saveToStorage('recentActivity', this.recentActivity);
                     
                     // Refresh UI
                     this.applySettings();
@@ -450,8 +1936,12 @@ class TimerHub {
                     this.loadUpcomingMeetings();
                     this.loadMeetingsHistory();
                     this.loadFavoriteMeetings();
+                    this.displayTags();
+                    this.displayPlaylists();
+                    this.displayRecentActivity();
                     
                     this.showNotification('Dane zaimportowane pomyślnie', 'success');
+                    this.trackEvent('data_imported');
                 }
             } catch (error) {
                 console.error('Import error:', error);
@@ -481,6 +1971,11 @@ class TimerHub {
                 this.meetings = [];
                 this.meetingsHistory = [];
                 this.favoriteMeetings = [];
+                this.tags = {};
+                this.playlists = {};
+                this.notes = {};
+                this.recentActivity = [];
+                this.searchHistory = [];
                 
                 // Clear from storage
                 if (this.currentUser) {
@@ -490,6 +1985,12 @@ class TimerHub {
                     localStorage.removeItem(`meetings_${userKey}`);
                     localStorage.removeItem(`meetingsHistory_${userKey}`);
                     localStorage.removeItem(`favoriteMeetings_${userKey}`);
+                    localStorage.removeItem('tags');
+                    localStorage.removeItem('playlists');
+                    localStorage.removeItem('notes');
+                    localStorage.removeItem('recentActivity');
+                    localStorage.removeItem('searchHistory');
+                    localStorage.removeItem('analytics');
                 }
                 
                 // Clear from Firebase
@@ -516,7 +2017,15 @@ class TimerHub {
                     colorTheme: 'default',
                     fontSize: 'normal',
                     cardStyle: 'default',
-                    compactMode: false
+                    compactMode: false,
+                    notificationSound: 'default',
+                    enablePomodoro: false,
+                    pomodoroWork: 25,
+                    pomodoroBreak: 5,
+                    enableAutoBreak: false,
+                    enableAnalytics: true,
+                    enableKeyboardShortcuts: true,
+                    enableDarkModeSched: false
                 };
                 this.saveSettings();
                 
@@ -528,8 +2037,12 @@ class TimerHub {
                 this.loadUpcomingMeetings();
                 this.loadMeetingsHistory();
                 this.loadFavoriteMeetings();
+                this.displayTags();
+                this.displayPlaylists();
+                this.displayRecentActivity();
                 
                 this.showNotification('Wszystkie dane zostały usunięte', 'success');
+                this.trackEvent('all_data_cleared');
             }
         }
     }
@@ -567,6 +2080,7 @@ class TimerHub {
                 this.listenToMessageReads();
                 this.listenToOnlineUsers();
                 this.listenToPrivateMessages();
+                this.listenToTypingStatus();
                 this.loadAllUsersFromFirebase();
                 this.updateOnlineUsers();
                 this.loadLastReadMessage();
@@ -603,6 +2117,7 @@ class TimerHub {
             this.listenToMessageReads();
             this.listenToOnlineUsers();
             this.listenToPrivateMessages();
+            this.listenToTypingStatus();
             this.loadAllUsersFromFirebase();
             this.updateOnlineUsers();
             this.loadLastReadMessage();
@@ -637,6 +2152,11 @@ class TimerHub {
     }
     
     init() {
+        // Initialize search functionality
+        document.getElementById('universalSearch').addEventListener('input', (e) => {
+            this.performSearch(e.target.value);
+        });
+        
         // Check pending login
         const pendingLogin = localStorage.getItem('pendingGoogleLogin');
         if (pendingLogin) {
@@ -679,6 +2199,16 @@ class TimerHub {
         
         // Setup message context menu
         this.setupMessageContextMenu();
+        
+        // Load initial data
+        this.displayTags();
+        this.displayPlaylists();
+        this.displayRecentActivity();
+        
+        // Start auto-break timer if enabled
+        if (this.settings.enableAutoBreak) {
+            this.scheduleAutoBreak();
+        }
     }
     
     setupMessageContextMenu() {
@@ -707,8 +2237,12 @@ class TimerHub {
         
         this.selectedMessageId = messageId;
         
-        // Show/hide delete button based on ownership
+        // Show/hide buttons based on ownership and time
+        const message = this.chatMessages.find(m => m.id === messageId);
+        const isRecent = message && (Date.now() - message.timestamp) < 5 * 60 * 1000; // 5 minutes
+        
         document.getElementById('deleteMessageBtn').style.display = isOwn ? 'flex' : 'none';
+        document.getElementById('editMessageBtn').style.display = (isOwn && isRecent) ? 'flex' : 'none';
         
         // Calculate position to keep menu in viewport
         let x = event.pageX;
@@ -775,12 +2309,16 @@ class TimerHub {
                 // Create anonymous user immediately after Google login
                 await this.createAnonymousUser();
             }
+            
+            // Track login
+            this.trackEvent('user_login', { method: 'google' });
         } catch (error) {
             console.error('Login error:', error);
             alert('Błąd logowania. Spróbuj ponownie.');
         }
     }
     
+    // Continue with rest of the original methods...
     async setupUserPresence() {
         if (!this.firebaseUser || !this.isFirebaseReady || !this.currentUser) return;
         
@@ -1257,7 +2795,7 @@ class TimerHub {
             );
             
             try {
-                await window.firebase.set(messageRef, { ...msg, read: true });
+                await window.firebase.update(messageRef, { read: true });
             } catch (error) {
                 console.error('Error marking message as read:', error);
             }
@@ -1354,6 +2892,9 @@ class TimerHub {
                     if (this.shouldShowNotification('chat')) {
                         const lastMessage = newMessages[newMessages.length - 1];
                         this.showNotification(`${lastMessage.userName}: ${lastMessage.content.substring(0, 50)}...`, 'info');
+                        
+                        // Play sound
+                        this.playNotificationSound();
                         
                         // Push notification
                         if (this.settings.pushNotifications) {
@@ -1529,6 +3070,12 @@ class TimerHub {
         // Clear input immediately for better UX
         input.value = '';
         
+        // Clear typing status
+        if (this.typingTimeout) {
+            clearTimeout(this.typingTimeout);
+            this.sendTypingStatus(false);
+        }
+        
         // Ensure we have Firebase user
         if (!this.firebaseUser && this.isFirebaseReady) {
             console.log('No Firebase user, creating one...');
@@ -1558,6 +3105,10 @@ class TimerHub {
             const chatRef = window.firebase.ref(window.firebase.database, 'chat/messages');
             const result = await window.firebase.push(chatRef, message);
             console.log('Message sent successfully, key:', result.key);
+            
+            // Add to recent activity
+            this.addToRecentActivity('chat', `Wysłano wiadomość w czacie`, 'fa-comment');
+            
         } catch (error) {
             console.error('Error sending message:', error);
             
@@ -1686,6 +3237,12 @@ class TimerHub {
         // Load user data
         this.loadUserDataFromLocalStorage();
         
+        // Display recent activity
+        this.displayRecentActivity();
+        
+        // Update upcoming meetings badge
+        this.updateUpcomingBadge();
+        
         // Ensure Firebase connection after app loads
         if (this.isFirebaseReady && !this.firebaseUser) {
             setTimeout(async () => {
@@ -1695,12 +3252,36 @@ class TimerHub {
         }
     }
     
+    updateUpcomingBadge() {
+        const upcoming = this.getUpcomingMeetings();
+        const todayMeetings = upcoming.filter(m => {
+            const meetingDate = new Date(m.dateTime);
+            const today = new Date();
+            return meetingDate.toDateString() === today.toDateString();
+        });
+        
+        const badge = document.getElementById('upcomingBadge');
+        if (todayMeetings.length > 0) {
+            badge.textContent = todayMeetings.length;
+            badge.style.display = 'inline-block';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+    
     logout() {
         if (confirm('Czy na pewno chcesz się wylogować?')) {
             // Stop timers
             if (this.timerInterval) {
                 clearInterval(this.timerInterval);
             }
+            
+            if (this.pomodoroInterval) {
+                clearInterval(this.pomodoroInterval);
+            }
+            
+            // Cancel auto break
+            this.cancelAutoBreak();
             
             // Sign out from Firebase
             if (this.firebaseUser && this.isFirebaseReady) {
@@ -1727,6 +3308,9 @@ class TimerHub {
             if (this.sessionTimeout) {
                 clearTimeout(this.sessionTimeout);
             }
+            
+            // Track logout
+            this.trackEvent('user_logout');
             
             // Reload page
             location.reload();
@@ -1792,6 +3376,7 @@ class TimerHub {
         this.loadUpcomingMeetings();
         this.loadMeetingsHistory();
         this.loadFavoriteMeetings();
+        this.displayTags();
     }
     
     showYouTubeMode() {
@@ -1800,6 +3385,7 @@ class TimerHub {
         document.getElementById('youtubeMode').style.display = 'block';
         this.loadFavoriteChannels();
         this.loadWatchHistory();
+        this.displayPlaylists();
     }
     
     // Teams tab navigation
@@ -1863,8 +3449,13 @@ class TimerHub {
         const date = document.getElementById('meetingDate').value;
         const time = document.getElementById('meetingTime').value;
         const duration = parseInt(document.getElementById('meetingDuration').value);
+        const tags = document.getElementById('meetingTags').value;
         const autoOpen = document.getElementById('autoOpenTeams').checked;
         const addToFavorites = document.getElementById('addToFavorites').checked;
+        
+        // Get selected reminders
+        const reminderCheckboxes = document.querySelectorAll('input[name="reminders"]:checked');
+        const reminders = Array.from(reminderCheckboxes).map(cb => parseInt(cb.value));
         
         const meetingDateTime = new Date(`${date}T${time}`);
         const now = new Date();
@@ -1885,6 +3476,8 @@ class TimerHub {
             link,
             dateTime: meetingDateTime.toISOString(),
             duration,
+            tags,
+            reminders,
             autoOpen,
             addedAt: new Date().toISOString()
         };
@@ -1900,6 +3493,12 @@ class TimerHub {
         
         // Add to history
         await this.addToMeetingsHistory(meeting);
+        
+        // Add to recent activity
+        this.addToRecentActivity('meeting', `Dodano spotkanie: ${title}`, 'fa-users');
+        
+        // Schedule reminders
+        this.scheduleReminders(meeting);
         
         // Start timer
         this.startTimer('teams', meetingDateTime, duration, link, autoOpen, title);
@@ -1923,8 +3522,46 @@ class TimerHub {
         document.getElementById('activeTimerNotification').style.display = 'block';
         document.getElementById('activeTimerText').textContent = `Odliczanie: ${title}`;
         
+        // Update upcoming badge
+        this.updateUpcomingBadge();
+        
         // Go back to main menu
         setTimeout(() => this.showMainMenu(), 1000);
+        
+        // Track event
+        this.trackEvent('meeting_created', { duration, hasReminders: reminders.length > 0, hasTags: !!tags });
+    }
+    
+    scheduleReminders(meeting) {
+        const meetingTime = new Date(meeting.dateTime).getTime();
+        const now = Date.now();
+        
+        meeting.reminders.forEach(minutesBefore => {
+            const reminderTime = meetingTime - (minutesBefore * 60 * 1000);
+            const timeUntilReminder = reminderTime - now;
+            
+            if (timeUntilReminder > 0) {
+                setTimeout(() => {
+                    this.showMeetingReminder(meeting, minutesBefore);
+                }, timeUntilReminder);
+            }
+        });
+    }
+    
+    showMeetingReminder(meeting, minutesBefore) {
+        const title = `Przypomnienie: ${meeting.title}`;
+        const body = `Spotkanie za ${minutesBefore} minut`;
+        
+        // Show notification
+        this.showNotification(body, 'warning');
+        
+        // Play sound
+        this.playNotificationSound();
+        
+        // Push notification
+        if (this.settings.pushNotifications) {
+            this.sendPushNotification(title, body);
+        }
     }
     
     async addToFavoriteMeetings(meeting) {
@@ -1987,6 +3624,9 @@ class TimerHub {
         // Show active timer notification
         document.getElementById('activeTimerNotification').style.display = 'block';
         document.getElementById('activeTimerText').textContent = `Odliczanie: ${title}`;
+        
+        // Add to recent activity
+        this.addToRecentActivity('meeting', `Szybki start: ${title}`, 'fa-play');
     }
     
     showAddUpcomingMeeting() {
@@ -2025,7 +3665,11 @@ class TimerHub {
         this.meetings.push(meeting);
         this.saveUserData('meetings', this.meetings);
         this.loadUpcomingMeetings();
+        this.updateUpcomingBadge();
         this.showNotification('Spotkanie dodane!', 'success');
+        
+        // Add to recent activity
+        this.addToRecentActivity('meeting', `Dodano spotkanie: ${title}`, 'fa-plus-circle');
     }
     
     async addToMeetingsHistory(meeting) {
@@ -2056,6 +3700,7 @@ class TimerHub {
         container.innerHTML = recentHistory.map(meeting => {
             const meetingDate = new Date(meeting.dateTime);
             const addedDate = new Date(meeting.addedAt);
+            const tags = meeting.tags ? meeting.tags.split(',').map(tag => tag.trim()) : [];
             
             return `
                 <div class="history-item">
@@ -2066,6 +3711,15 @@ class TimerHub {
                             <span><i class="fas fa-clock"></i> ${meetingDate.toLocaleTimeString(this.settings.region, {hour: '2-digit', minute: '2-digit'})}</span>
                             <span><i class="fas fa-hourglass"></i> ${meeting.duration} min</span>
                         </div>
+                        ${tags.length > 0 ? `
+                            <div class="meeting-tags">
+                                ${tags.map(tag => `
+                                    <span class="tag-item" style="background: ${this.tags[tag]?.color || '#6366f1'}; color: ${this.getContrastColor(this.tags[tag]?.color || '#6366f1')}">
+                                        ${this.escapeHtml(tag)}
+                                    </span>
+                                `).join('')}
+                            </div>
+                        ` : ''}
                         <div class="history-meta" style="margin-top: 0.5rem;">
                             <span style="color: var(--text-muted);"><i class="fas fa-plus-circle"></i> Dodano: ${addedDate.toLocaleDateString(this.settings.region)} ${addedDate.toLocaleTimeString(this.settings.region, {hour: '2-digit', minute: '2-digit'})}</span>
                         </div>
@@ -2106,8 +3760,10 @@ class TimerHub {
         
         container.innerHTML = upcomingMeetings.map(meeting => {
             const meetingDate = new Date(meeting.dateTime);
+            const tags = meeting.tags ? meeting.tags.split(',').map(tag => tag.trim()) : [];
+            
             return `
-                <div class="history-item">
+                <div class="history-item" data-meeting-id="${meeting.id}">
                     <div class="history-info">
                         <h4>${this.escapeHtml(meeting.title)}</h4>
                         <div class="history-meta">
@@ -2115,10 +3771,22 @@ class TimerHub {
                             <span><i class="fas fa-clock"></i> ${meetingDate.toLocaleTimeString(this.settings.region, {hour: '2-digit', minute: '2-digit'})}</span>
                             <span><i class="fas fa-hourglass"></i> ${meeting.duration} min</span>
                         </div>
+                        ${tags.length > 0 ? `
+                            <div class="meeting-tags">
+                                ${tags.map(tag => `
+                                    <span class="tag-item" style="background: ${this.tags[tag]?.color || '#6366f1'}; color: ${this.getContrastColor(this.tags[tag]?.color || '#6366f1')}">
+                                        ${this.escapeHtml(tag)}
+                                    </span>
+                                `).join('')}
+                            </div>
+                        ` : ''}
                     </div>
                     <div class="history-actions">
                         <button onclick="window.app.startMeetingTimer(${meeting.id})">
                             <i class="fas fa-play"></i> Start
+                        </button>
+                        <button onclick="window.app.openNotesForMeeting(${meeting.id})">
+                            <i class="fas fa-sticky-note"></i>
                         </button>
                         <button onclick="window.app.deleteMeeting(${meeting.id})">
                             <i class="fas fa-trash"></i>
@@ -2138,6 +3806,9 @@ class TimerHub {
             // Show active timer notification
             document.getElementById('activeTimerNotification').style.display = 'block';
             document.getElementById('activeTimerText').textContent = `Odliczanie: ${meeting.title}`;
+            
+            // Add to recent activity
+            this.addToRecentActivity('timer', `Uruchomiono timer: ${meeting.title}`, 'fa-play-circle');
         }
     }
     
@@ -2146,6 +3817,7 @@ class TimerHub {
         await this.saveUserData('meetings', this.meetings);
         this.loadUpcomingMeetings();
         this.updateStats();
+        this.updateUpcomingBadge();
         this.showNotification('Spotkanie usunięte', 'success');
     }
     
@@ -2194,6 +3866,9 @@ class TimerHub {
             this.showNotification('Timer ustawiony dla filmu YouTube!', 'success');
         }
         
+        // Add to recent activity
+        this.addToRecentActivity('video', `Zaplanowano: ${title}`, 'fa-youtube');
+        
         // Reset form and go back to main menu
         e.target.reset();
         const today = new Date().toISOString().split('T')[0];
@@ -2205,6 +3880,9 @@ class TimerHub {
         
         // Go back to main menu
         setTimeout(() => this.showMainMenu(), 1000);
+        
+        // Track event
+        this.trackEvent('youtube_timer_set', { duration });
     }
     
     extractVideoId(url) {
@@ -2217,22 +3895,6 @@ class TimerHub {
             btn.classList.remove('active');
         });
         button.classList.add('active');
-    }
-    
-    searchYouTube() {
-        const query = document.getElementById('youtubeSearch').value;
-        const searchType = document.querySelector('.search-type.active').dataset.type;
-        
-        if (!query) {
-            this.showNotification('Wpisz frazę do wyszukania', 'warning');
-            return;
-        }
-        
-        // Redirect to YouTube
-        this.redirectToYouTube(query, searchType);
-        
-        // Clear search input
-        document.getElementById('youtubeSearch').value = '';
     }
     
     redirectToYouTube(query, type) {
@@ -2248,6 +3910,9 @@ class TimerHub {
         }
         
         window.open(searchUrl, '_blank');
+        
+        // Add to recent activity
+        this.addToRecentActivity('search', `Wyszukano: ${query} (${type})`, 'fa-search');
     }
     
     showAddFavorite() {
@@ -2274,6 +3939,9 @@ class TimerHub {
         await this.saveUserData('favoriteChannels', this.favoriteChannels);
         this.updateStats();
         this.showNotification(`Dodano "${name}" do ulubionych!`, 'success');
+        
+        // Add to recent activity
+        this.addToRecentActivity('channel', `Dodano do ulubionych: ${name}`, 'fa-star');
     }
     
     loadFavoriteChannels() {
@@ -2311,6 +3979,9 @@ class TimerHub {
         }
         
         window.open(url, '_blank');
+        
+        // Add to recent activity
+        this.addToRecentActivity('channel', `Otworzono kanał: ${channelName}`, 'fa-tv');
     }
     
     async removeFavorite(channelId) {
@@ -2375,6 +4046,9 @@ class TimerHub {
         
         // Open video
         window.open(url, '_blank');
+        
+        // Add to recent activity
+        this.addToRecentActivity('video', `Obejrzano: ${title}`, 'fa-play-circle');
     }
     
     async clearHistory() {
@@ -2410,8 +4084,10 @@ class TimerHub {
         const iconElement = document.getElementById('timerIcon');
         if (type === 'teams') {
             iconElement.innerHTML = '<i class="fas fa-users"></i>';
-        } else {
+        } else if (type === 'youtube') {
             iconElement.innerHTML = '<i class="fab fa-youtube" style="color: #ff0000;"></i>';
+        } else {
+            iconElement.innerHTML = '<i class="fas fa-clock"></i>';
         }
         
         // Set title
@@ -2423,18 +4099,8 @@ class TimerHub {
         // Save current timer state
         this.saveToStorage('activeTimer', this.currentTimer);
         
-        // Add to history if teams meeting
-        if (type === 'teams') {
-            const meeting = {
-                title: this.currentTimer.title,
-                link: url,
-                dateTime: startTime.toISOString(),
-                duration: duration,
-                autoOpen: autoOpen,
-                addedAt: new Date().toISOString()
-            };
-            this.addToMeetingsHistory(meeting);
-        }
+        // Track event
+        this.trackEvent('timer_started', { type, duration });
     }
     
     updateTimer() {
@@ -2460,6 +4126,7 @@ class TimerHub {
                 this.currentTimer.notified2min = true;
                 if (this.shouldShowNotification('timer')) {
                     this.showNotification(`${this.currentTimer.type === 'teams' ? 'Spotkanie' : 'Film'} rozpocznie się za 2 minuty!`, 'warning');
+                    this.playNotificationSound();
                     
                     if (this.settings.pushNotifications) {
                         this.sendPushNotification(
@@ -2498,6 +4165,7 @@ class TimerHub {
                 this.currentTimer.notified5min = true;
                 if (this.shouldShowNotification('timer')) {
                     this.showNotification('Pozostało 5 minut!', 'warning');
+                    this.playNotificationSound();
                 }
             }
         } else {
@@ -2509,13 +4177,14 @@ class TimerHub {
             clearInterval(this.timerInterval);
             if (this.shouldShowNotification('timer')) {
                 this.showNotification('Timer zakończony!', 'success');
+                this.playNotificationSound();
             }
             
             // Update stats
             if (this.currentTimer.type === 'teams') {
                 const todayMeetings = parseInt(document.getElementById('totalMeetings').textContent);
                 document.getElementById('totalMeetings').textContent = todayMeetings + 1;
-            } else {
+            } else if (this.currentTimer.type === 'youtube') {
                 const totalVideos = parseInt(document.getElementById('totalVideos').textContent);
                 document.getElementById('totalVideos').textContent = totalVideos + 1;
             }
@@ -2528,6 +4197,9 @@ class TimerHub {
             
             // Auto close after 5 seconds
             setTimeout(() => this.closeTimer(), 5000);
+            
+            // Track completion
+            this.trackEvent('timer_completed', { type: this.currentTimer.type, duration: this.currentTimer.duration });
         }
         
         // Update progress info
@@ -2560,6 +4232,13 @@ class TimerHub {
                     watchedAt: new Date().toISOString()
                 });
             }
+            
+            // Add to recent activity
+            this.addToRecentActivity(
+                this.currentTimer.type === 'teams' ? 'meeting' : 'video',
+                `Otworzono: ${this.currentTimer.title}`,
+                this.currentTimer.type === 'teams' ? 'fa-users' : 'fa-youtube'
+            );
         }
     }
     
@@ -2585,6 +4264,8 @@ class TimerHub {
             document.getElementById('activeTimerNotification').style.display = 'none';
             this.closeTimer();
             this.showNotification('Timer zatrzymany', 'info');
+            
+            this.trackEvent('timer_stopped');
         }
     }
     
@@ -2660,18 +4341,6 @@ class TimerHub {
             ${timeString}<br>
             <span style="font-size: 0.8em; opacity: 0.8;">${dateString}</span>
         `;
-    }
-    
-    updateStats() {
-        // Count today's meetings
-        const today = new Date().toDateString();
-        const todayMeetings = this.meetings.filter(m => 
-            new Date(m.dateTime).toDateString() === today
-        ).length;
-        
-        document.getElementById('totalMeetings').textContent = todayMeetings;
-        document.getElementById('totalVideos').textContent = this.watchHistory.length;
-        document.getElementById('favoriteChannels').textContent = Object.keys(this.favoriteChannels).length;
     }
     
     formatNumber(num) {
