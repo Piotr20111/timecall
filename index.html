@@ -189,6 +189,110 @@
         </div>
     </div>
 
+    <!-- Message Edit Modal -->
+    <div id="editMessageModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-edit"></i> Edytuj wiadomość</h3>
+                <button class="modal-close" onclick="window.app.closeEditModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <textarea id="editMessageTextarea" placeholder="Edytuj wiadomość..." style="width: 100%; min-height: 100px;"></textarea>
+                <div class="edit-actions" style="margin-top: 1rem; display: flex; gap: 1rem;">
+                    <button class="save-edit-btn" onclick="window.app.saveEditedMessage()">
+                        <i class="fas fa-save"></i> Zapisz
+                    </button>
+                    <button class="cancel-edit-btn" onclick="window.app.closeEditModal()">
+                        <i class="fas fa-times"></i> Anuluj
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Calendar Integration Modal -->
+    <div id="calendarModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-calendar-alt"></i> Kalendarz</h3>
+                <button class="modal-close" onclick="window.app.closeCalendarModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="calendar-view">
+                    <div class="calendar-header">
+                        <button onclick="window.app.previousMonth()"><i class="fas fa-chevron-left"></i></button>
+                        <h4 id="calendarMonthYear"></h4>
+                        <button onclick="window.app.nextMonth()"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                    <div class="calendar-weekdays">
+                        <div>Pon</div>
+                        <div>Wt</div>
+                        <div>Śr</div>
+                        <div>Czw</div>
+                        <div>Pt</div>
+                        <div>Sob</div>
+                        <div>Nd</div>
+                    </div>
+                    <div id="calendarDays" class="calendar-days"></div>
+                </div>
+                <div class="calendar-events">
+                    <h4>Wydarzenia w wybranym dniu</h4>
+                    <div id="dayEvents" class="day-events-list">
+                        <p class="empty-state">Wybierz dzień aby zobaczyć wydarzenia</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Modal -->
+    <div id="statsModal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-chart-line"></i> Szczegółowe statystyki</h3>
+                <button class="modal-close" onclick="window.app.closeStatsModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="stats-tabs">
+                    <button class="stat-tab active" onclick="window.app.showStatTab('overview')">Podsumowanie</button>
+                    <button class="stat-tab" onclick="window.app.showStatTab('meetings')">Spotkania</button>
+                    <button class="stat-tab" onclick="window.app.showStatTab('youtube')">YouTube</button>
+                    <button class="stat-tab" onclick="window.app.showStatTab('productivity')">Produktywność</button>
+                </div>
+                <div id="statsContent" class="stats-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Playlist View Modal -->
+    <div id="playlistViewModal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-list"></i> <span id="playlistViewTitle">Playlista</span></h3>
+                <button class="modal-close" onclick="window.app.closePlaylistView()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="playlist-actions">
+                    <button class="add-video-btn" onclick="window.app.addVideoToPlaylist()">
+                        <i class="fas fa-plus"></i> Dodaj film
+                    </button>
+                    <button class="play-all-btn" onclick="window.app.playAllVideos()">
+                        <i class="fas fa-play"></i> Odtwórz wszystkie
+                    </button>
+                </div>
+                <div id="playlistVideos" class="playlist-videos-list"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Main Container -->
     <div class="container" style="display: none;">
         <!-- Header -->
@@ -1144,101 +1248,115 @@
                     </button>
                 </div>
                 <div class="pomodoro-stats">
-                    <span>Sesje: <strong id="pomodoroSessions">0</strong></span>
+                    Sesje: <span id="pomodoroSessions">0</span>
                 </div>
             </div>
         </div>
 
-        <!-- Notifications -->
+        <!-- Notifications container -->
         <div id="notifications" class="notifications"></div>
     </div>
 
     <!-- Firebase -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, signInWithCredential, GoogleAuthProvider, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getDatabase, ref, set, get, onValue, push, serverTimestamp, onDisconnect, remove, query, orderByChild, limitToLast, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            onAuthStateChanged 
+        } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { 
+            getDatabase, 
+            ref, 
+            set, 
+            get, 
+            push, 
+            onValue, 
+            onDisconnect, 
+            serverTimestamp,
+            remove,
+            update,
+            query,
+            orderByChild,
+            limitToLast
+        } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 
-        // Your web app's Firebase configuration
         const firebaseConfig = {
-            apiKey: "AIzaSyA2vwaCsdHC56t6AOxst76PlxkQQrbJaF8",
-            authDomain: "timer-hub-app-374ed.firebaseapp.com",
-            databaseURL: "https://timer-hub-app-374ed-default-rtdb.firebaseio.com",
-            projectId: "timer-hub-app-374ed",
-            storageBucket: "timer-hub-app-374ed.firebasestorage.app",
-            messagingSenderId: "39373932173",
-            appId: "1:39373932173:web:a793bfd1d749d15e0d84c4"
+            apiKey: "AIzaSyBIUs_PIGG3G5EJGblkBEP2sTIHZq5Kpvs",
+            authDomain: "timerhub-5fe38.firebaseapp.com",
+            databaseURL: "https://timerhub-5fe38-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "timerhub-5fe38",
+            storageBucket: "timerhub-5fe38.appspot.com",
+            messagingSenderId: "630173406824",
+            appId: "1:630173406824:web:3b88c00d0e32b40e2e7d65",
+            measurementId: "G-L9BQ5NCDPP"
         };
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const database = getDatabase(app);
 
-        // Expose Firebase to global scope
+        // Make Firebase services available globally
         window.firebase = {
-            app,
             auth,
             database,
             ref,
             set,
             get,
-            onValue,
             push,
-            serverTimestamp,
+            onValue,
             onDisconnect,
+            serverTimestamp,
             remove,
-            signInWithCredential,
-            GoogleAuthProvider,
-            onAuthStateChanged,
+            update,
             query,
             orderByChild,
             limitToLast,
             signInAnonymously,
-            update
+            onAuthStateChanged
         };
-
-        console.log('Firebase initialized successfully');
     </script>
 
+    <!-- Main Application Script -->
     <script src="script.js"></script>
-    
-    <!-- Google Sign-In Script -->
+
+    <!-- Google Sign In Script with async loading -->
     <script>
+        // Load Google Sign-In library
         function loadGoogleSignIn() {
-            // Check if user is already logged in
-            const savedUser = localStorage.getItem('currentUser');
-            if (savedUser) {
-                // User is logged in, don't load Google Sign-In
+            // Check if Google library already loaded
+            if (window.google && window.google.accounts) {
+                initializeGoogleSignIn();
                 return;
             }
             
+            // Create script element
             const script = document.createElement('script');
             script.src = 'https://accounts.google.com/gsi/client';
             script.async = true;
             script.defer = true;
+            
             script.onload = function() {
-                if (typeof google !== 'undefined' && google.accounts) {
-                    initializeGoogleSignIn();
-                }
+                console.log('Google Sign-In library loaded');
+                initializeGoogleSignIn();
             };
+            
             script.onerror = function() {
-                console.error('Failed to load Google Sign-In');
+                console.error('Failed to load Google Sign-In library');
                 showGoogleSignInError();
             };
+            
             document.head.appendChild(script);
         }
         
+        // Initialize Google Sign-In
         function initializeGoogleSignIn() {
             try {
                 google.accounts.id.initialize({
-                    client_id: "630173406824-ada5j713qsm99do8e98fvbiiq61j59dj.apps.googleusercontent.com",
+                    client_id: '630173406824-ada5j713qsm99do8e98fvbiiq61j59dj.apps.googleusercontent.com',
                     callback: handleCredentialResponse,
                     auto_select: false,
-                    cancel_on_tap_outside: true,
-                    ux_mode: 'popup',
-                    context: 'signin',
-                    itp_support: true
+                    cancel_on_tap_outside: true
                 });
                 
                 google.accounts.id.renderButton(
@@ -1246,19 +1364,26 @@
                     { 
                         theme: "filled_blue",
                         size: "large",
-                        width: 300,
                         text: "signin_with",
                         shape: "rectangular",
                         logo_alignment: "left",
-                        locale: "pl"
+                        width: 280
                     }
                 );
+                
+                // Check for stored credential
+                google.accounts.id.prompt((notification) => {
+                    if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+                        console.log('Google Sign In not displayed or skipped');
+                    }
+                });
             } catch (error) {
                 console.error('Error initializing Google Sign-In:', error);
                 showGoogleSignInError();
             }
         }
         
+        // Handle Google Sign-In response
         function handleCredentialResponse(response) {
             try {
                 const responsePayload = decodeJwtResponse(response.credential);

@@ -24,7 +24,7 @@ class TimerHub {
         this.currentPrivateChat = null;
         this.onlineUsers = {};
         this.allUsers = {};
-        this.processedUsers = new Set();
+        this.usersLoaded = new Set(); // Fix for duplicate users
         this.customAvatar = null;
         this.tags = {};
         this.playlists = {};
@@ -48,6 +48,10 @@ class TimerHub {
             none: null
         };
         this.debugMode = false;
+        this.currentCalendarMonth = new Date();
+        this.currentPlaylistId = null;
+        this.editingMessageId = null;
+        this.replyToMessageId = null;
         
         // Settings
         this.settings = {
@@ -627,6 +631,341 @@ ${notes.after || 'Brak notatek'}
         this.showNotification('Notatki wyeksportowane!', 'success');
     }
     
+    // Calendar functionality
+    showCalendarIntegration() {
+        document.getElementById('calendarModal').classList.add('active');
+        this.renderCalendar();
+    }
+    
+    closeCalendarModal() {
+        document.getElementById('calendarModal').classList.remove('active');
+    }
+    
+    renderCalendar() {
+        const year = this.currentCalendarMonth.getFullYear();
+        const month = this.currentCalendarMonth.getMonth();
+        
+        // Update header
+        const monthNames = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec', 
+                          'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień'];
+        document.getElementById('calendarMonthYear').textContent = `${monthNames[month]} ${year}`;
+        
+        // Get first day of month and number of days
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        
+        // Generate calendar days
+        const calendarDays = document.getElementById('calendarDays');
+        calendarDays.innerHTML = '';
+        
+        // Add empty cells for days before month starts
+        const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1; // Adjust for Monday start
+        for (let i = 0; i < adjustedFirstDay; i++) {
+            calendarDays.innerHTML += '<div class="calendar-day empty"></div>';
+        }
+        
+        // Add days of month
+        for (let day = 1; day <= daysInMonth; day++) {
+            const date = new Date(year, month, day);
+            const hasEvents = this.getEventsForDate(date).length > 0;
+            const isToday = this.isToday(date);
+            
+            calendarDays.innerHTML += `
+                <div class="calendar-day ${hasEvents ? 'has-events' : ''} ${isToday ? 'today' : ''}" 
+                     onclick="window.app.showDayEvents(${year}, ${month}, ${day})">
+                    ${day}
+                    ${hasEvents ? '<div class="event-indicator"></div>' : ''}
+                </div>
+            `;
+        }
+    }
+    
+    previousMonth() {
+        this.currentCalendarMonth.setMonth(this.currentCalendarMonth.getMonth() - 1);
+        this.renderCalendar();
+    }
+    
+    nextMonth() {
+        this.currentCalendarMonth.setMonth(this.currentCalendarMonth.getMonth() + 1);
+        this.renderCalendar();
+    }
+    
+    getEventsForDate(date) {
+        const dateStr = date.toDateString();
+        return this.meetings.filter(meeting => {
+            const meetingDate = new Date(meeting.dateTime);
+            return meetingDate.toDateString() === dateStr;
+        });
+    }
+    
+    isToday(date) {
+        const today = new Date();
+        return date.toDateString() === today.toDateString();
+    }
+    
+    showDayEvents(year, month, day) {
+        const date = new Date(year, month, day);
+        const events = this.getEventsForDate(date);
+        const container = document.getElementById('dayEvents');
+        
+        if (events.length === 0) {
+            container.innerHTML = '<p class="empty-state">Brak wydarzeń w tym dniu</p>';
+            return;
+        }
+        
+        container.innerHTML = `
+            <h5>${date.toLocaleDateString(this.settings.region, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h5>
+            ${events.map(event => {
+                const eventDate = new Date(event.dateTime);
+                return `
+                    <div class="day-event-item">
+                        <div class="event-time">
+                            ${eventDate.toLocaleTimeString(this.settings.region, { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                        <div class="event-details">
+                            <div class="event-title">${this.escapeHtml(event.title)}</div>
+                            <div class="event-meta">
+                                <i class="fas fa-clock"></i> ${event.duration} min
+                            </div>
+                        </div>
+                        <button onclick="window.app.startMeetingTimer(${event.id})" class="start-event-btn">
+                            <i class="fas fa-play"></i>
+                        </button>
+                    </div>
+                `;
+            }).join('')}
+        `;
+    }
+    
+    // Stats functionality
+    showStats() {
+        document.getElementById('statsModal').classList.add('active');
+        this.showStatTab('overview');
+    }
+    
+    closeStatsModal() {
+        document.getElementById('statsModal').classList.remove('active');
+    }
+    
+    showStatTab(tabName) {
+        // Update tabs
+        document.querySelectorAll('.stat-tab').forEach(tab => tab.classList.remove('active'));
+        event.target.classList.add('active');
+        
+        // Show content
+        const content = document.getElementById('statsContent');
+        
+        switch (tabName) {
+            case 'overview':
+                this.renderOverviewStats(content);
+                break;
+            case 'meetings':
+                this.renderMeetingsStats(content);
+                break;
+            case 'youtube':
+                this.renderYouTubeStats(content);
+                break;
+            case 'productivity':
+                this.renderProductivityStats(content);
+                break;
+        }
+    }
+    
+    renderOverviewStats(container) {
+        const totalMeetings = this.meetings.length + this.meetingsHistory.length;
+        const totalVideos = this.watchHistory.length;
+        const totalChannels = Object.keys(this.favoriteChannels).length;
+        const activeDays = this.calculateActiveDays();
+        const totalTime = this.calculateTotalTime();
+        
+        container.innerHTML = `
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <i class="fas fa-users"></i>
+                    <h3>${totalMeetings}</h3>
+                    <p>Wszystkich spotkań</p>
+                </div>
+                <div class="stat-box">
+                    <i class="fas fa-play-circle"></i>
+                    <h3>${totalVideos}</h3>
+                    <p>Obejrzanych filmów</p>
+                </div>
+                <div class="stat-box">
+                    <i class="fas fa-tv"></i>
+                    <h3>${totalChannels}</h3>
+                    <p>Ulubionych kanałów</p>
+                </div>
+                <div class="stat-box">
+                    <i class="fas fa-calendar-check"></i>
+                    <h3>${activeDays}</h3>
+                    <p>Dni aktywności</p>
+                </div>
+                <div class="stat-box">
+                    <i class="fas fa-clock"></i>
+                    <h3>${totalTime}h</h3>
+                    <p>Łączny czas</p>
+                </div>
+                <div class="stat-box">
+                    <i class="fas fa-fire"></i>
+                    <h3>${this.calculateStreak()}</h3>
+                    <p>Dni z rzędu</p>
+                </div>
+            </div>
+        `;
+    }
+    
+    renderMeetingsStats(container) {
+        const meetingsByMonth = this.groupMeetingsByMonth();
+        const averageDuration = this.calculateAverageMeetingDuration();
+        const mostFrequentTime = this.getMostFrequentMeetingTime();
+        
+        container.innerHTML = `
+            <div class="stat-details">
+                <h4>Statystyki spotkań</h4>
+                <div class="stat-item">
+                    <span>Średni czas spotkania:</span>
+                    <strong>${averageDuration} minut</strong>
+                </div>
+                <div class="stat-item">
+                    <span>Najczęstsza godzina spotkań:</span>
+                    <strong>${mostFrequentTime}</strong>
+                </div>
+                <div class="stat-item">
+                    <span>Spotkania w tym miesiącu:</span>
+                    <strong>${meetingsByMonth[new Date().getMonth()] || 0}</strong>
+                </div>
+            </div>
+            <div class="stat-chart">
+                <h4>Spotkania w ostatnich miesiącach</h4>
+                <div class="mini-chart">
+                    ${this.renderMiniChart(meetingsByMonth)}
+                </div>
+            </div>
+        `;
+    }
+    
+    renderYouTubeStats(container) {
+        const watchTimeByChannel = this.getWatchTimeByChannel();
+        const topChannels = Object.entries(watchTimeByChannel)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5);
+        
+        container.innerHTML = `
+            <div class="stat-details">
+                <h4>Top 5 kanałów</h4>
+                ${topChannels.map(([channel, count]) => `
+                    <div class="stat-item">
+                        <span>${this.escapeHtml(channel)}</span>
+                        <strong>${count} filmów</strong>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+    
+    renderProductivityStats(container) {
+        const pomodoroStats = this.getPomodoroStats();
+        const focusTime = this.calculateFocusTime();
+        
+        container.innerHTML = `
+            <div class="stat-details">
+                <h4>Produktywność</h4>
+                <div class="stat-item">
+                    <span>Sesje Pomodoro:</span>
+                    <strong>${pomodoroStats.sessions}</strong>
+                </div>
+                <div class="stat-item">
+                    <span>Czas skupienia:</span>
+                    <strong>${focusTime} godzin</strong>
+                </div>
+                <div class="stat-item">
+                    <span>Średnia długość sesji:</span>
+                    <strong>${pomodoroStats.avgLength} minut</strong>
+                </div>
+            </div>
+        `;
+    }
+    
+    calculateTotalTime() {
+        let totalMinutes = 0;
+        this.meetings.forEach(m => totalMinutes += m.duration || 60);
+        this.meetingsHistory.forEach(m => totalMinutes += m.duration || 60);
+        return Math.round(totalMinutes / 60);
+    }
+    
+    groupMeetingsByMonth() {
+        const byMonth = {};
+        [...this.meetings, ...this.meetingsHistory].forEach(meeting => {
+            const month = new Date(meeting.dateTime).getMonth();
+            byMonth[month] = (byMonth[month] || 0) + 1;
+        });
+        return byMonth;
+    }
+    
+    calculateAverageMeetingDuration() {
+        const allMeetings = [...this.meetings, ...this.meetingsHistory];
+        if (allMeetings.length === 0) return 0;
+        
+        const totalDuration = allMeetings.reduce((sum, m) => sum + (m.duration || 60), 0);
+        return Math.round(totalDuration / allMeetings.length);
+    }
+    
+    getMostFrequentMeetingTime() {
+        const hours = {};
+        [...this.meetings, ...this.meetingsHistory].forEach(meeting => {
+            const hour = new Date(meeting.dateTime).getHours();
+            hours[hour] = (hours[hour] || 0) + 1;
+        });
+        
+        const mostFrequent = Object.entries(hours)
+            .sort((a, b) => b[1] - a[1])[0];
+        
+        return mostFrequent ? `${mostFrequent[0]}:00` : 'Brak danych';
+    }
+    
+    getWatchTimeByChannel() {
+        const channels = {};
+        this.watchHistory.forEach(video => {
+            const channel = video.channel || 'Nieznany';
+            channels[channel] = (channels[channel] || 0) + 1;
+        });
+        return channels;
+    }
+    
+    getPomodoroStats() {
+        // This would be calculated from stored pomodoro history
+        return {
+            sessions: this.pomodoroSessions,
+            avgLength: 25,
+            totalTime: this.pomodoroSessions * 25
+        };
+    }
+    
+    calculateFocusTime() {
+        // Calculate based on timer usage
+        return Math.round((this.pomodoroSessions * 25) / 60);
+    }
+    
+    renderMiniChart(data) {
+        const maxValue = Math.max(...Object.values(data), 1);
+        const months = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze', 'Lip', 'Sie', 'Wrz', 'Paź', 'Lis', 'Gru'];
+        
+        return `
+            <div class="chart-bars">
+                ${months.map((month, i) => {
+                    const value = data[i] || 0;
+                    const height = (value / maxValue) * 100;
+                    return `
+                        <div class="chart-bar-container">
+                            <div class="chart-bar" style="height: ${height}%"></div>
+                            <div class="chart-label">${month}</div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    }
+    
     // Tags functionality
     addNewTag() {
         const name = document.getElementById('newTagInput').value.trim();
@@ -746,8 +1085,109 @@ ${notes.after || 'Brak notatek'}
         const playlist = this.playlists[playlistId];
         if (!playlist) return;
         
-        // TODO: Implement playlist view
-        this.showNotification('Otwieranie playlisty...', 'info');
+        this.currentPlaylistId = playlistId;
+        document.getElementById('playlistViewTitle').textContent = playlist.name;
+        document.getElementById('playlistViewModal').classList.add('active');
+        this.displayPlaylistVideos();
+    }
+    
+    closePlaylistView() {
+        document.getElementById('playlistViewModal').classList.remove('active');
+        this.currentPlaylistId = null;
+    }
+    
+    displayPlaylistVideos() {
+        if (!this.currentPlaylistId) return;
+        
+        const playlist = this.playlists[this.currentPlaylistId];
+        const container = document.getElementById('playlistVideos');
+        
+        if (playlist.videos.length === 0) {
+            container.innerHTML = '<p class="empty-state">Playlista jest pusta</p>';
+            return;
+        }
+        
+        container.innerHTML = playlist.videos.map((video, index) => `
+            <div class="playlist-video-item">
+                <div class="video-number">${index + 1}</div>
+                <div class="video-info">
+                    <div class="video-title">${this.escapeHtml(video.title)}</div>
+                    <div class="video-channel">${this.escapeHtml(video.channel || 'Nieznany kanał')}</div>
+                </div>
+                <div class="video-actions">
+                    <button onclick="window.app.playVideo('${video.url}')" title="Odtwórz">
+                        <i class="fas fa-play"></i>
+                    </button>
+                    <button onclick="window.app.removeFromPlaylist(${index})" title="Usuń z playlisty">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    addVideoToPlaylist() {
+        if (!this.currentPlaylistId) return;
+        
+        const url = prompt('Podaj URL filmu YouTube:');
+        if (!url) return;
+        
+        const title = prompt('Tytuł filmu:');
+        if (!title) return;
+        
+        const video = {
+            url,
+            title,
+            channel: 'Nieznany',
+            addedAt: new Date().toISOString()
+        };
+        
+        this.playlists[this.currentPlaylistId].videos.push(video);
+        this.saveToStorage('playlists', this.playlists);
+        this.displayPlaylistVideos();
+        this.displayPlaylists();
+        
+        this.showNotification('Film dodany do playlisty!', 'success');
+    }
+    
+    removeFromPlaylist(index) {
+        if (!this.currentPlaylistId) return;
+        
+        this.playlists[this.currentPlaylistId].videos.splice(index, 1);
+        this.saveToStorage('playlists', this.playlists);
+        this.displayPlaylistVideos();
+        this.displayPlaylists();
+        
+        this.showNotification('Film usunięty z playlisty', 'success');
+    }
+    
+    playAllVideos() {
+        if (!this.currentPlaylistId) return;
+        
+        const playlist = this.playlists[this.currentPlaylistId];
+        if (playlist.videos.length === 0) {
+            this.showNotification('Playlista jest pusta', 'warning');
+            return;
+        }
+        
+        // Open first video
+        window.open(playlist.videos[0].url, '_blank');
+        
+        // Create YouTube playlist URL if possible
+        const videoIds = playlist.videos
+            .map(v => this.extractVideoId(v.url))
+            .filter(id => id);
+        
+        if (videoIds.length > 1) {
+            const playlistUrl = `https://www.youtube.com/watch_videos?video_ids=${videoIds.join(',')}`;
+            setTimeout(() => {
+                window.open(playlistUrl, '_blank');
+            }, 1000);
+        }
+    }
+    
+    playVideo(url) {
+        window.open(url, '_blank');
     }
     
     deletePlaylist(playlistId) {
@@ -758,6 +1198,105 @@ ${notes.after || 'Brak notatek'}
             this.displayPlaylists();
             this.showNotification('Playlista usunięta', 'success');
         }
+    }
+    
+    // Edit message functionality
+    editMessage() {
+        if (!this.selectedMessageId) return;
+        
+        const message = this.chatMessages.find(m => m.id === this.selectedMessageId);
+        if (!message || message.userId !== this.firebaseUser?.uid) {
+            this.showNotification('Nie możesz edytować tej wiadomości', 'error');
+            return;
+        }
+        
+        // Check if message is recent (within 5 minutes)
+        if (Date.now() - message.timestamp > 5 * 60 * 1000) {
+            this.showNotification('Możesz edytować wiadomości tylko przez 5 minut po wysłaniu', 'warning');
+            return;
+        }
+        
+        // Close context menu
+        document.getElementById('messageContextMenu').style.display = 'none';
+        
+        // Open edit modal
+        this.editingMessageId = this.selectedMessageId;
+        document.getElementById('editMessageModal').classList.add('active');
+        
+        // Load current message content (remove HTML tags)
+        const currentContent = message.content.replace(/<[^>]*>/g, '');
+        document.getElementById('editMessageTextarea').value = currentContent;
+        document.getElementById('editMessageTextarea').focus();
+    }
+    
+    closeEditModal() {
+        document.getElementById('editMessageModal').classList.remove('active');
+        this.editingMessageId = null;
+    }
+    
+    async saveEditedMessage() {
+        if (!this.editingMessageId || !this.firebaseUser || !this.isFirebaseReady) return;
+        
+        const newContent = document.getElementById('editMessageTextarea').value.trim();
+        if (!newContent) {
+            this.showNotification('Wiadomość nie może być pusta', 'warning');
+            return;
+        }
+        
+        try {
+            const messageRef = window.firebase.ref(window.firebase.database, `chat/messages/${this.editingMessageId}`);
+            await window.firebase.update(messageRef, {
+                content: this.escapeHtml(newContent),
+                edited: true,
+                editedAt: Date.now()
+            });
+            
+            this.closeEditModal();
+            this.showNotification('Wiadomość zaktualizowana', 'success');
+        } catch (error) {
+            console.error('Error editing message:', error);
+            this.showNotification('Błąd podczas edycji wiadomości', 'error');
+        }
+    }
+    
+    // Reply functionality
+    replyToMessage() {
+        if (!this.selectedMessageId) return;
+        
+        const message = this.chatMessages.find(m => m.id === this.selectedMessageId);
+        if (!message) return;
+        
+        this.replyToMessageId = this.selectedMessageId;
+        
+        // Update input placeholder
+        const input = document.getElementById('chatInput');
+        input.placeholder = `Odpowiedz ${message.userName}...`;
+        input.focus();
+        
+        // Show reply indicator
+        const replyIndicator = document.createElement('div');
+        replyIndicator.className = 'reply-indicator';
+        replyIndicator.id = 'replyIndicator';
+        replyIndicator.innerHTML = `
+            <i class="fas fa-reply"></i>
+            <span>Odpowiadasz: ${this.escapeHtml(message.userName)}</span>
+            <button onclick="window.app.cancelReply()">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+        
+        const chatInputForm = document.querySelector('.chat-input-form');
+        chatInputForm.insertBefore(replyIndicator, chatInputForm.firstChild);
+        
+        // Close context menu
+        document.getElementById('messageContextMenu').style.display = 'none';
+    }
+    
+    cancelReply() {
+        this.replyToMessageId = null;
+        document.getElementById('chatInput').placeholder = 'Napisz wiadomość...';
+        const replyIndicator = document.getElementById('replyIndicator');
+        if (replyIndicator) replyIndicator.remove();
     }
     
     // Pomodoro functionality
@@ -1198,18 +1737,6 @@ ${notes.after || 'Brak notatek'}
         this.toggleEmojiPicker();
     }
     
-    replyToMessage() {
-        // TODO: Implement reply functionality
-        this.showNotification('Funkcja odpowiedzi będzie dostępna wkrótce', 'info');
-        document.getElementById('messageContextMenu').style.display = 'none';
-    }
-    
-    editMessage() {
-        // TODO: Implement edit functionality
-        this.showNotification('Funkcja edycji będzie dostępna wkrótce', 'info');
-        document.getElementById('messageContextMenu').style.display = 'none';
-    }
-    
     // Settings enhancements
     changeNotificationSound(sound) {
         this.settings.notificationSound = sound;
@@ -1388,73 +1915,6 @@ ${notes.after || 'Brak notatek'}
         }
     }
     
-    // Calendar integration placeholder
-    showCalendarIntegration() {
-        this.showNotification('Integracja z kalendarzem będzie dostępna wkrótce!', 'info');
-    }
-    
-    // Stats placeholder
-    showStats() {
-        const totalMeetings = this.meetings.length + this.meetingsHistory.length;
-        const totalVideos = this.watchHistory.length;
-        const totalChannels = Object.keys(this.favoriteChannels).length;
-        const activeDays = this.calculateActiveDays();
-        
-        const content = `
-            <div class="stats-overview">
-                <div class="stat-item">
-                    <i class="fas fa-users"></i>
-                    <div>
-                        <div class="stat-value">${totalMeetings}</div>
-                        <div class="stat-label">Wszystkich spotkań</div>
-                    </div>
-                </div>
-                <div class="stat-item">
-                    <i class="fas fa-play-circle"></i>
-                    <div>
-                        <div class="stat-value">${totalVideos}</div>
-                        <div class="stat-label">Obejrzanych filmów</div>
-                    </div>
-                </div>
-                <div class="stat-item">
-                    <i class="fas fa-tv"></i>
-                    <div>
-                        <div class="stat-value">${totalChannels}</div>
-                        <div class="stat-label">Ulubionych kanałów</div>
-                    </div>
-                </div>
-                <div class="stat-item">
-                    <i class="fas fa-fire"></i>
-                    <div>
-                        <div class="stat-value">${activeDays}</div>
-                        <div class="stat-label">Dni aktywności</div>
-                    </div>
-                </div>
-            </div>
-            <div style="margin-top: 2rem; text-align: center;">
-                <p class="text-muted">Szczegółowe statystyki będą dostępne wkrótce!</p>
-            </div>
-        `;
-        
-        this.showModal('📊 Statystyki', content);
-    }
-    
-    calculateActiveDays() {
-        const activityDates = new Set();
-        
-        // Add meeting dates
-        this.meetings.forEach(m => {
-            activityDates.add(new Date(m.dateTime).toDateString());
-        });
-        
-        // Add watch history dates
-        this.watchHistory.forEach(w => {
-            activityDates.add(new Date(w.watchedAt).toDateString());
-        });
-        
-        return activityDates.size;
-    }
-    
     // Update stats for main screen
     updateStats() {
         // Count today's meetings
@@ -1502,6 +1962,22 @@ ${notes.after || 'Brak notatek'}
         }
         
         return streak;
+    }
+    
+    calculateActiveDays() {
+        const activityDates = new Set();
+        
+        // Add meeting dates
+        this.meetings.forEach(m => {
+            activityDates.add(new Date(m.dateTime).toDateString());
+        });
+        
+        // Add watch history dates
+        this.watchHistory.forEach(w => {
+            activityDates.add(new Date(w.watchedAt).toDateString());
+        });
+        
+        return activityDates.size;
     }
     
     // Search improvements
@@ -2467,8 +2943,8 @@ ${notes.after || 'Brak notatek'}
         if (!this.isFirebaseReady) return;
         
         try {
-            // Clear processed users set for fresh load
-            this.processedUsers.clear();
+            // Clear the set to track users loaded in this session
+            this.usersLoaded.clear();
             
             // Load all users who have profiles
             const usersRef = window.firebase.ref(window.firebase.database, 'users');
@@ -2478,9 +2954,11 @@ ${notes.after || 'Brak notatek'}
                 snapshot.forEach((userSnapshot) => {
                     const userId = userSnapshot.key;
                     const userData = userSnapshot.val();
-                    if (userData.profile && !this.processedUsers.has(userId)) {
+                    
+                    // Only add user if they have a profile and haven't been loaded yet
+                    if (userData.profile && !this.usersLoaded.has(userId)) {
                         this.allUsers[userId] = userData.profile;
-                        this.processedUsers.add(userId);
+                        this.usersLoaded.add(userId);
                     }
                 });
             }
@@ -2520,49 +2998,50 @@ ${notes.after || 'Brak notatek'}
     updatePrivateUsersList() {
         const container = document.getElementById('privateUsersList');
         
-        // Clear processed users tracking for this update
-        const displayedUsers = new Map();
+        // Use Map to ensure unique users
+        const uniqueUsers = new Map();
         
-        // Process online users first
+        // Add online users
         Object.entries(this.onlineUsers).forEach(([userId, presence]) => {
-            if (userId !== this.firebaseUser?.uid && !displayedUsers.has(userId)) {
-                displayedUsers.set(userId, {
+            if (userId !== this.firebaseUser?.uid && presence.user_info && !uniqueUsers.has(userId)) {
+                uniqueUsers.set(userId, {
                     userId,
-                    userInfo: presence.user_info || {},
-                    isOnline: true
+                    name: presence.user_info.name || 'Użytkownik',
+                    picture: presence.user_info.picture || 'https://ui-avatars.com/api/?name=User&background=6366f1&color=fff',
+                    isOnline: true,
+                    email: presence.user_info.email
                 });
             }
         });
         
-        // Then add offline users from allUsers
+        // Add offline users from allUsers
         Object.entries(this.allUsers).forEach(([userId, userInfo]) => {
-            if (userId !== this.firebaseUser?.uid && !displayedUsers.has(userId)) {
-                displayedUsers.set(userId, {
+            if (userId !== this.firebaseUser?.uid && !uniqueUsers.has(userId)) {
+                uniqueUsers.set(userId, {
                     userId,
-                    userInfo,
-                    isOnline: false
+                    name: userInfo.name || 'Użytkownik',
+                    picture: userInfo.picture || 'https://ui-avatars.com/api/?name=User&background=6366f1&color=fff',
+                    isOnline: false,
+                    email: userInfo.email
                 });
             }
         });
         
-        if (displayedUsers.size === 0) {
+        if (uniqueUsers.size === 0) {
             container.innerHTML = '<p class="empty-state">Brak dostępnych użytkowników</p>';
             return;
         }
         
-        const usersList = Array.from(displayedUsers.values()).map(user => {
-            const unreadCount = this.getUnreadPrivateMessages(user.userId);
-            
-            return {
-                ...user,
-                unreadCount,
-                name: user.userInfo.name || 'Użytkownik',
-                picture: user.userInfo.picture || 'https://ui-avatars.com/api/?name=User&background=6366f1&color=fff'
-            };
-        });
+        // Convert Map to array and add unread counts
+        const usersList = Array.from(uniqueUsers.values()).map(user => ({
+            ...user,
+            unreadCount: this.getUnreadPrivateMessages(user.userId)
+        }));
         
-        // Sort: online users first, then by name
+        // Sort: unread messages first, then online users, then by name
         usersList.sort((a, b) => {
+            if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
+            if (a.unreadCount === 0 && b.unreadCount > 0) return 1;
             if (a.isOnline && !b.isOnline) return -1;
             if (!a.isOnline && b.isOnline) return 1;
             return a.name.localeCompare(b.name);
@@ -2999,11 +3478,29 @@ ${notes.after || 'Brak notatek'}
                 }
             }
             
+            // Show if message was edited
+            const editedText = msg.edited ? ' (edytowane)' : '';
+            
+            // Handle reply
+            let replyHtml = '';
+            if (msg.replyTo) {
+                const originalMsg = this.chatMessages.find(m => m.id === msg.replyTo);
+                if (originalMsg) {
+                    replyHtml = `
+                        <div class="message-reply">
+                            <i class="fas fa-reply"></i>
+                            <span>${originalMsg.userName}: ${originalMsg.content.substring(0, 50)}...</span>
+                        </div>
+                    `;
+                }
+            }
+            
             return `
                 <div class="chat-message ${isOwn ? 'own' : ''}" data-message-id="${msg.id}">
+                    ${replyHtml}
                     <div class="message-header">
                         <span class="message-author">${this.escapeHtml(msg.userName)}</span>
-                        <span class="message-time">${time}</span>
+                        <span class="message-time">${time}${editedText}</span>
                     </div>
                     <div class="message-content">
                         ${msg.content}
@@ -3076,6 +3573,11 @@ ${notes.after || 'Brak notatek'}
             this.sendTypingStatus(false);
         }
         
+        // Cancel reply if active
+        if (this.replyToMessageId) {
+            this.cancelReply();
+        }
+        
         // Ensure we have Firebase user
         if (!this.firebaseUser && this.isFirebaseReady) {
             console.log('No Firebase user, creating one...');
@@ -3095,6 +3597,11 @@ ${notes.after || 'Brak notatek'}
             timestamp: Date.now(),
             type: 'user'
         };
+        
+        // Add reply reference if replying
+        if (this.replyToMessageId) {
+            message.replyTo = this.replyToMessageId;
+        }
         
         try {
             if (!this.firebaseUser) {
