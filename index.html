@@ -4,10 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="google-signin-client_id" content="630173406824-ada5j713qsm99do8e98fvbiiq61j59dj.apps.googleusercontent.com">
-    <title>Timer Hub - Zarządzanie czasem spotkań i filmów</title>
+    <title>Timer Hub Pro - Zaawansowane zarządzanie czasem</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#6366f1">
 </head>
 <body>
     <!-- Login Screen -->
@@ -15,7 +17,7 @@
         <div class="login-container">
             <div class="login-header">
                 <i class="fas fa-clock"></i>
-                <h1>Timer Hub</h1>
+                <h1>Timer Hub Pro</h1>
                 <p>Zaloguj się aby kontynuować</p>
             </div>
             
@@ -26,7 +28,7 @@
             <div class="login-footer">
                 <p>Zarządzaj swoim czasem efektywnie</p>
                 <p style="font-size: 0.8rem; margin-top: 0.5rem; opacity: 0.7;">
-                    © 2025 Timer Hub by Piotr20111
+                    © 2025 Timer Hub Pro by Piotr20111
                 </p>
             </div>
         </div>
@@ -39,7 +41,8 @@
             <div class="loader-circle"></div>
             <div class="loader-circle"></div>
         </div>
-        <h2>Timer Hub</h2>
+        <h2>Timer Hub Pro</h2>
+        <p class="loading-tip" id="loadingTip">Ładowanie aplikacji...</p>
     </div>
 
     <!-- Search Overlay -->
@@ -47,29 +50,54 @@
         <div class="search-container">
             <div class="search-header">
                 <i class="fas fa-search"></i>
-                <input type="text" id="universalSearch" placeholder="Szukaj spotkań, filmów, kanałów..." autocomplete="off">
+                <input type="text" id="universalSearch" placeholder="Szukaj spotkań, filmów, kanałów, użytkowników..." autocomplete="off">
                 <button class="search-close" onclick="window.app.closeSearch()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
+            <div class="search-filters">
+                <button class="search-filter active" data-filter="all" onclick="window.app.setSearchFilter(this)">
+                    Wszystko
+                </button>
+                <button class="search-filter" data-filter="meetings" onclick="window.app.setSearchFilter(this)">
+                    Spotkania
+                </button>
+                <button class="search-filter" data-filter="videos" onclick="window.app.setSearchFilter(this)">
+                    Filmy
+                </button>
+                <button class="search-filter" data-filter="channels" onclick="window.app.setSearchFilter(this)">
+                    Kanały
+                </button>
+                <button class="search-filter" data-filter="users" onclick="window.app.setSearchFilter(this)">
+                    Użytkownicy
+                </button>
+            </div>
             <div class="search-status" id="searchStatus" style="display: none;">
                 <div class="search-spinner"></div>
-                <span>Wyszukiwanie TimerHub...</span>
+                <span>Wyszukiwanie TimerHub Pro...</span>
             </div>
             <div class="search-results" id="searchResults"></div>
         </div>
     </div>
 
-    <!-- AI Assistant -->
+    <!-- AI Assistant Enhanced -->
     <div id="aiAssistant" class="ai-assistant">
         <div class="ai-header">
             <i class="fas fa-robot"></i>
-            <span>Asystent TimerHub</span>
+            <span>Asystent AI Pro</span>
+            <button class="ai-minimize" onclick="window.app.minimizeAI()">
+                <i class="fas fa-minus"></i>
+            </button>
             <button class="ai-close" onclick="window.app.closeAIAssistant()">
                 <i class="fas fa-times"></i>
             </button>
         </div>
         <div class="ai-messages" id="aiMessages"></div>
+        <div class="ai-suggestions" id="aiSuggestions">
+            <button onclick="window.app.askAI('Jakie mam dzisiaj spotkania?')">Dzisiejsze spotkania</button>
+            <button onclick="window.app.askAI('Pokaż statystyki tygodnia')">Statystyki</button>
+            <button onclick="window.app.askAI('Zaplanuj przerwę')">Zaplanuj przerwę</button>
+        </div>
         <div class="ai-input-container">
             <input type="text" id="aiInput" placeholder="Zapytaj o cokolwiek..." autocomplete="off">
             <button onclick="window.app.sendAIMessage()">
@@ -159,9 +187,9 @@
         </div>
     </div>
 
-    <!-- Notes Modal -->
+    <!-- Notes Modal Enhanced -->
     <div id="notesModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content notes-modal-large">
             <div class="modal-header">
                 <h3><i class="fas fa-sticky-note"></i> <span id="notesTitle">Notatki</span></h3>
                 <button class="modal-close" onclick="window.app.closeNotesModal()">
@@ -174,6 +202,29 @@
                     <button class="note-tab" onclick="window.app.switchNoteTab('during')">Podczas spotkania</button>
                     <button class="note-tab" onclick="window.app.switchNoteTab('after')">Po spotkaniu</button>
                 </div>
+                <div class="notes-toolbar">
+                    <button onclick="window.app.formatNote('bold')" title="Pogrubienie">
+                        <i class="fas fa-bold"></i>
+                    </button>
+                    <button onclick="window.app.formatNote('italic')" title="Kursywa">
+                        <i class="fas fa-italic"></i>
+                    </button>
+                    <button onclick="window.app.formatNote('underline')" title="Podkreślenie">
+                        <i class="fas fa-underline"></i>
+                    </button>
+                    <button onclick="window.app.formatNote('bullet')" title="Lista punktowana">
+                        <i class="fas fa-list-ul"></i>
+                    </button>
+                    <button onclick="window.app.formatNote('number')" title="Lista numerowana">
+                        <i class="fas fa-list-ol"></i>
+                    </button>
+                    <button onclick="window.app.formatNote('task')" title="Lista zadań">
+                        <i class="fas fa-tasks"></i>
+                    </button>
+                    <button onclick="window.app.insertTemplate()" title="Wstaw szablon">
+                        <i class="fas fa-file-alt"></i>
+                    </button>
+                </div>
                 <div class="notes-content">
                     <textarea id="notesTextarea" placeholder="Wprowadź notatki..."></textarea>
                 </div>
@@ -184,7 +235,97 @@
                     <button class="notes-export-btn" onclick="window.app.exportNotes()">
                         <i class="fas fa-download"></i> Eksportuj
                     </button>
+                    <button class="notes-share-btn" onclick="window.app.shareNotes()">
+                        <i class="fas fa-share"></i> Udostępnij
+                    </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Message Modal -->
+    <div id="editMessageModal" class="modal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3><i class="fas fa-edit"></i> Edytuj wiadomość</h3>
+                <button class="modal-close" onclick="window.app.closeEditModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <textarea id="editMessageInput" placeholder="Edytuj swoją wiadomość..."></textarea>
+                <div class="edit-actions">
+                    <button class="btn-cancel" onclick="window.app.closeEditModal()">
+                        Anuluj
+                    </button>
+                    <button class="btn-save" onclick="window.app.saveEditedMessage()">
+                        <i class="fas fa-save"></i> Zapisz zmiany
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Calendar Integration Modal -->
+    <div id="calendarModal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3><i class="fas fa-calendar-alt"></i> Kalendarz spotkań</h3>
+                <button class="modal-close" onclick="window.app.closeCalendarModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="calendar-controls">
+                    <button onclick="window.app.previousMonth()">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <h4 id="calendarMonthYear"></h4>
+                    <button onclick="window.app.nextMonth()">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+                <div id="calendarGrid" class="calendar-grid"></div>
+                <div class="calendar-legend">
+                    <div class="legend-item">
+                        <span class="legend-color" style="background: #6366f1;"></span>
+                        <span>Spotkania Teams</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background: #ff0000;"></span>
+                        <span>Filmy YouTube</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background: #10b981;"></span>
+                        <span>Wydarzenia zakończone</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Playlist View Modal -->
+    <div id="playlistViewModal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3><i class="fas fa-list"></i> <span id="playlistViewTitle">Playlista</span></h3>
+                <button class="modal-close" onclick="window.app.closePlaylistView()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="playlist-actions">
+                    <button onclick="window.app.addVideoToPlaylist()">
+                        <i class="fas fa-plus"></i> Dodaj film
+                    </button>
+                    <button onclick="window.app.playAllVideos()">
+                        <i class="fas fa-play"></i> Odtwórz wszystko
+                    </button>
+                    <button onclick="window.app.shufflePlaylist()">
+                        <i class="fas fa-random"></i> Losuj
+                    </button>
+                </div>
+                <div id="playlistVideos" class="playlist-videos"></div>
             </div>
         </div>
     </div>
@@ -196,7 +337,7 @@
             <div class="header-content">
                 <h1 class="logo">
                     <i class="fas fa-clock"></i>
-                    Timer Hub
+                    Timer Hub Pro
                 </h1>
                 <div class="header-actions">
                     <button class="search-btn" onclick="window.app.openSearch()">
@@ -205,9 +346,14 @@
                     <button class="ai-btn" onclick="window.app.openAIAssistant()">
                         <i class="fas fa-robot"></i>
                     </button>
+                    <button class="notifications-btn" onclick="window.app.toggleNotificationCenter()">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" id="notificationBadge" style="display: none;">0</span>
+                    </button>
                     <div class="user-info" id="userInfo">
                         <img id="userAvatar" src="" alt="Avatar" class="user-avatar" onerror="this.src='https://ui-avatars.com/api/?name=User&background=6366f1&color=fff'" onclick="window.app.openAvatarModal()">
                         <span id="userName"></span>
+                        <span class="user-level" id="userLevel">Poziom 1</span>
                     </div>
                     <button class="chat-toggle-btn" onclick="window.app.toggleChat()">
                         <i class="fas fa-comments"></i>
@@ -227,7 +373,20 @@
             </div>
         </header>
 
-        <!-- Settings Panel -->
+        <!-- Notification Center -->
+        <div id="notificationCenter" class="notification-center">
+            <div class="notification-center-header">
+                <h3><i class="fas fa-bell"></i> Centrum powiadomień</h3>
+                <button class="clear-all-btn" onclick="window.app.clearAllNotifications()">
+                    Wyczyść wszystko
+                </button>
+            </div>
+            <div id="notificationsList" class="notifications-list">
+                <p class="empty-state">Brak nowych powiadomień</p>
+            </div>
+        </div>
+
+        <!-- Settings Panel Enhanced -->
         <div id="settingsPanel" class="settings-panel">
             <div class="settings-header">
                 <h3><i class="fas fa-cog"></i> Ustawienia</h3>
@@ -237,6 +396,24 @@
             </div>
             
             <div class="settings-content">
+                <!-- Profile Settings -->
+                <div class="settings-section">
+                    <h4><i class="fas fa-user"></i> Profil</h4>
+                    <div class="settings-item">
+                        <label>Nazwa użytkownika:</label>
+                        <input type="text" id="profileName" placeholder="Twoja nazwa">
+                    </div>
+                    <div class="settings-item">
+                        <label>Status:</label>
+                        <input type="text" id="profileStatus" placeholder="Twój status" maxlength="50">
+                    </div>
+                    <div class="settings-item">
+                        <button class="settings-button" onclick="window.app.updateProfile()">
+                            <i class="fas fa-save"></i> Zapisz profil
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Notifications Settings -->
                 <div class="settings-section">
                     <h4><i class="fas fa-bell"></i> Powiadomienia</h4>
@@ -256,6 +433,12 @@
                         <label>
                             <input type="checkbox" id="enableTimerNotifications" checked onchange="window.app.updateNotificationSettings()">
                             <span>Powiadomienia timerów</span>
+                        </label>
+                    </div>
+                    <div class="settings-item">
+                        <label>
+                            <input type="checkbox" id="enableMeetingReminders" checked onchange="window.app.updateNotificationSettings()">
+                            <span>Przypomnienia o spotkaniach</span>
                         </label>
                     </div>
                     <div class="settings-item">
@@ -284,6 +467,33 @@
                             <option value="480">8 godzin</option>
                             <option value="-1">Na zawsze</option>
                         </select>
+                    </div>
+                </div>
+
+                <!-- Teams Settings -->
+                <div class="settings-section">
+                    <h4><i class="fas fa-users"></i> Microsoft Teams</h4>
+                    <div class="settings-item">
+                        <label>Domyślny czas przypomnienia (minuty):</label>
+                        <input type="number" id="defaultReminderTime" value="15" min="1" max="120">
+                    </div>
+                    <div class="settings-item">
+                        <label>
+                            <input type="checkbox" id="autoJoinTeams" onchange="window.app.updateTeamsSettings()">
+                            <span>Automatycznie dołączaj do spotkań</span>
+                        </label>
+                    </div>
+                    <div class="settings-item">
+                        <label>
+                            <input type="checkbox" id="muteOnJoin" checked onchange="window.app.updateTeamsSettings()">
+                            <span>Wycisz mikrofon przy dołączaniu</span>
+                        </label>
+                    </div>
+                    <div class="settings-item">
+                        <label>
+                            <input type="checkbox" id="cameraOffOnJoin" checked onchange="window.app.updateTeamsSettings()">
+                            <span>Wyłącz kamerę przy dołączaniu</span>
+                        </label>
                     </div>
                 </div>
 
@@ -367,6 +577,13 @@
                             <option value="12h">12-godzinny (AM/PM)</option>
                         </select>
                     </div>
+                    <div class="settings-item">
+                        <label>Pierwszy dzień tygodnia:</label>
+                        <select id="firstDayOfWeek" onchange="window.app.changeFirstDayOfWeek(this.value)">
+                            <option value="monday">Poniedziałek</option>
+                            <option value="sunday">Niedziela</option>
+                        </select>
+                    </div>
                 </div>
 
                 <!-- Productivity Settings -->
@@ -387,9 +604,19 @@
                         <input type="number" id="pomodoroBreak" value="5" min="1" max="30" onchange="window.app.updatePomodoroSettings()">
                     </div>
                     <div class="settings-item">
+                        <label>Długa przerwa (minuty):</label>
+                        <input type="number" id="pomodoroLongBreak" value="15" min="5" max="60" onchange="window.app.updatePomodoroSettings()">
+                    </div>
+                    <div class="settings-item">
                         <label>
                             <input type="checkbox" id="enableAutoBreak" onchange="window.app.toggleAutoBreak()">
                             <span>Automatyczne przerwy co 2 godziny</span>
+                        </label>
+                    </div>
+                    <div class="settings-item">
+                        <label>
+                            <input type="checkbox" id="enableFocusMode" onchange="window.app.toggleFocusMode()">
+                            <span>Tryb skupienia (ukryj rozpraszacze)</span>
                         </label>
                     </div>
                 </div>
@@ -417,6 +644,12 @@
                             <span>Ograniczone animacje</span>
                         </label>
                     </div>
+                    <div class="settings-item">
+                        <label>
+                            <input type="checkbox" id="enableHapticFeedback" onchange="window.app.toggleHapticFeedback()">
+                            <span>Wibracje (urządzenia mobilne)</span>
+                        </label>
+                    </div>
                 </div>
 
                 <!-- Privacy Settings -->
@@ -432,6 +665,12 @@
                         <label>
                             <input type="checkbox" id="showReadReceipts" checked onchange="window.app.updatePrivacySettings()">
                             <span>Pokaż potwierdzenia przeczytania</span>
+                        </label>
+                    </div>
+                    <div class="settings-item">
+                        <label>
+                            <input type="checkbox" id="showTypingIndicator" checked onchange="window.app.updatePrivacySettings()">
+                            <span>Pokaż gdy piszę</span>
                         </label>
                     </div>
                     <div class="settings-item">
@@ -461,6 +700,11 @@
                         </button>
                     </div>
                     <div class="settings-item">
+                        <button class="settings-button" onclick="window.app.backupToGoogle()">
+                            <i class="fab fa-google-drive"></i> Kopia na Google Drive
+                        </button>
+                    </div>
+                    <div class="settings-item">
                         <button class="settings-button danger" onclick="window.app.clearAllData()">
                             <i class="fas fa-trash"></i> Wyczyść wszystkie dane
                         </button>
@@ -483,15 +727,26 @@
                         </label>
                     </div>
                     <div class="settings-item">
+                        <label>
+                            <input type="checkbox" id="enableExperimentalFeatures" onchange="window.app.toggleExperimentalFeatures()">
+                            <span>Funkcje eksperymentalne</span>
+                        </label>
+                    </div>
+                    <div class="settings-item">
                         <button class="settings-button" onclick="window.app.showKeyboardShortcuts()">
                             <i class="fas fa-keyboard"></i> Pokaż skróty klawiszowe
+                        </button>
+                    </div>
+                    <div class="settings-item">
+                        <button class="settings-button" onclick="window.app.showAbout()">
+                            <i class="fas fa-info-circle"></i> O aplikacji
                         </button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Global Chat -->
+        <!-- Global Chat Enhanced -->
         <div id="globalChat" class="global-chat">
             <div class="chat-header">
                 <h3><i class="fas fa-comments"></i> Czat globalny</h3>
@@ -500,6 +755,9 @@
                         <i class="fas fa-users"></i>
                         <span id="onlineCount">0</span> online
                     </span>
+                    <button class="chat-minimize" onclick="window.app.minimizeChat()">
+                        <i class="fas fa-minus"></i>
+                    </button>
                     <button class="chat-close" onclick="window.app.toggleChat()">
                         <i class="fas fa-times"></i>
                     </button>
@@ -514,6 +772,9 @@
                 <button class="chat-tab" onclick="window.app.switchChatTab('private')">
                     <i class="fas fa-user"></i> Prywatne
                     <span class="pm-badge" id="pmBadge" style="display: none;">0</span>
+                </button>
+                <button class="chat-tab" onclick="window.app.switchChatTab('rooms')">
+                    <i class="fas fa-door-open"></i> Pokoje
                 </button>
             </div>
             
@@ -534,9 +795,21 @@
                     </span>
                     <span id="typingUsers"></span>
                 </div>
+                <div class="chat-reply-preview" id="chatReplyPreview" style="display: none;">
+                    <div class="reply-content">
+                        <i class="fas fa-reply"></i>
+                        <span id="replyToText"></span>
+                        <button onclick="window.app.cancelReply()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
                 <form class="chat-input-form" onsubmit="window.app.sendMessage(event)">
                     <button type="button" class="chat-emoji-btn" onclick="window.app.toggleEmojiPicker()">
                         <i class="far fa-smile"></i>
+                    </button>
+                    <button type="button" class="chat-attach-btn" onclick="window.app.attachFile()">
+                        <i class="fas fa-paperclip"></i>
                     </button>
                     <input 
                         type="text" 
@@ -552,7 +825,14 @@
                     </button>
                 </form>
                 <div class="emoji-picker" id="emojiPicker" style="display: none;">
-                    <div class="emoji-grid">
+                    <div class="emoji-tabs">
+                        <button class="emoji-tab active" onclick="window.app.showEmojiCategory('smileys')">😀</button>
+                        <button class="emoji-tab" onclick="window.app.showEmojiCategory('animals')">🐶</button>
+                        <button class="emoji-tab" onclick="window.app.showEmojiCategory('food')">🍕</button>
+                        <button class="emoji-tab" onclick="window.app.showEmojiCategory('activities')">⚽</button>
+                        <button class="emoji-tab" onclick="window.app.showEmojiCategory('objects')">💡</button>
+                    </div>
+                    <div class="emoji-grid" id="emojiGrid">
                         <span onclick="window.app.insertEmoji('😀')">😀</span>
                         <span onclick="window.app.insertEmoji('😂')">😂</span>
                         <span onclick="window.app.insertEmoji('😍')">😍</span>
@@ -565,6 +845,10 @@
                         <span onclick="window.app.insertEmoji('❤️')">❤️</span>
                         <span onclick="window.app.insertEmoji('🎉')">🎉</span>
                         <span onclick="window.app.insertEmoji('🔥')">🔥</span>
+                        <span onclick="window.app.insertEmoji('💯')">💯</span>
+                        <span onclick="window.app.insertEmoji('🤝')">🤝</span>
+                        <span onclick="window.app.insertEmoji('✨')">✨</span>
+                        <span onclick="window.app.insertEmoji('🙏')">🙏</span>
                     </div>
                 </div>
             </div>
@@ -592,8 +876,14 @@
                         </button>
                         <div class="private-chat-user-info">
                             <img id="privateChatAvatar" src="" alt="">
-                            <span id="privateChatUsername"></span>
+                            <div>
+                                <span id="privateChatUsername"></span>
+                                <span class="user-status" id="privateChatStatus"></span>
+                            </div>
                         </div>
+                        <button class="private-chat-options" onclick="window.app.showPrivateChatOptions()">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
                     </div>
                     <div class="chat-messages" id="privateMessages"></div>
                     <form class="chat-input-form" onsubmit="window.app.sendPrivateMessage(event)">
@@ -609,6 +899,44 @@
                             <i class="fas fa-paper-plane"></i>
                         </button>
                     </form>
+                </div>
+            </div>
+            
+            <!-- Chat Rooms -->
+            <div id="roomsChatContent" class="chat-content">
+                <div class="rooms-list">
+                    <div class="rooms-header">
+                        <h4>Pokoje tematyczne</h4>
+                        <button class="create-room-btn" onclick="window.app.createChatRoom()">
+                            <i class="fas fa-plus"></i> Utwórz pokój
+                        </button>
+                    </div>
+                    <div id="roomsList" class="rooms-container">
+                        <div class="room-item" onclick="window.app.joinRoom('general')">
+                            <i class="fas fa-comments"></i>
+                            <div class="room-info">
+                                <h5>Ogólny</h5>
+                                <p>Rozmowy na każdy temat</p>
+                            </div>
+                            <span class="room-users">12 online</span>
+                        </div>
+                        <div class="room-item" onclick="window.app.joinRoom('productivity')">
+                            <i class="fas fa-tasks"></i>
+                            <div class="room-info">
+                                <h5>Produktywność</h5>
+                                <p>Wskazówki i porady</p>
+                            </div>
+                            <span class="room-users">5 online</span>
+                        </div>
+                        <div class="room-item" onclick="window.app.joinRoom('tech')">
+                            <i class="fas fa-laptop-code"></i>
+                            <div class="room-info">
+                                <h5>Technologia</h5>
+                                <p>Dyskusje o technologii</p>
+                            </div>
+                            <span class="room-users">8 online</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -627,16 +955,36 @@
             <button id="deleteMessageBtn" onclick="window.app.deleteMessageFromMenu()" style="display: none;">
                 <i class="fas fa-trash"></i> Usuń
             </button>
+            <button id="translateMessageBtn" onclick="window.app.translateMessage()">
+                <i class="fas fa-language"></i> Przetłumacz
+            </button>
+            <button id="reportMessageBtn" onclick="window.app.reportMessage()">
+                <i class="fas fa-flag"></i> Zgłoś
+            </button>
         </div>
 
-        <!-- Main Menu -->
+        <!-- Main Menu Enhanced -->
         <div id="mainMenu" class="main-menu">
             <div class="welcome-section">
                 <h2>Witaj, <span id="welcomeName"></span>!</h2>
                 <p>Zarządzaj swoim czasem podczas spotkań i oglądania filmów</p>
+                <div class="user-stats-bar">
+                    <div class="stat-item">
+                        <i class="fas fa-trophy"></i>
+                        <span id="userPoints">0</span> punktów
+                    </div>
+                    <div class="stat-item">
+                        <i class="fas fa-fire"></i>
+                        <span id="userStreak">0</span> dni z rzędu
+                    </div>
+                    <div class="stat-item">
+                        <i class="fas fa-medal"></i>
+                        <span id="userAchievements">0</span> osiągnięć
+                    </div>
+                </div>
             </div>
 
-            <!-- Quick Actions -->
+            <!-- Quick Actions Enhanced -->
             <div class="quick-actions">
                 <button class="quick-action-btn" onclick="window.app.startQuickTimer()">
                     <i class="fas fa-stopwatch"></i>
@@ -653,6 +1001,14 @@
                 <button class="quick-action-btn" onclick="window.app.showStats()">
                     <i class="fas fa-chart-line"></i>
                     <span>Statystyki</span>
+                </button>
+                <button class="quick-action-btn" onclick="window.app.showTasks()">
+                    <i class="fas fa-check-circle"></i>
+                    <span>Zadania</span>
+                </button>
+                <button class="quick-action-btn" onclick="window.app.showGoals()">
+                    <i class="fas fa-bullseye"></i>
+                    <span>Cele</span>
                 </button>
             </div>
             
@@ -677,6 +1033,14 @@
                     <div class="card-footer">
                         <span class="card-action">Rozpocznij <i class="fas fa-arrow-right"></i></span>
                     </div>
+                </div>
+            </div>
+
+            <!-- Today's Schedule -->
+            <div class="today-schedule">
+                <h3><i class="fas fa-calendar-day"></i> Dzisiejszy harmonogram</h3>
+                <div id="todaySchedule" class="schedule-timeline">
+                    <p class="empty-state">Brak zaplanowanych wydarzeń na dziś</p>
                 </div>
             </div>
 
@@ -711,16 +1075,24 @@
                 </div>
             </div>
 
-            <!-- Recent Activity -->
+            <!-- Recent Activity Enhanced -->
             <div class="recent-activity">
                 <h3><i class="fas fa-clock"></i> Ostatnia aktywność</h3>
                 <div id="recentActivityList" class="activity-list">
                     <p class="empty-state">Brak ostatniej aktywności</p>
                 </div>
             </div>
+
+            <!-- Weekly Progress -->
+            <div class="weekly-progress">
+                <h3><i class="fas fa-chart-bar"></i> Postęp tygodniowy</h3>
+                <div id="weeklyProgressChart" class="progress-chart">
+                    <canvas id="progressCanvas"></canvas>
+                </div>
+            </div>
         </div>
 
-        <!-- Teams Mode -->
+        <!-- Teams Mode Enhanced -->
         <div id="teamsMode" class="mode-container" style="display: none;">
             <div class="mode-header">
                 <button class="back-button" onclick="window.app.showMainMenu()">
@@ -728,8 +1100,16 @@
                 </button>
                 <h2>
                     <i class="fas fa-users"></i>
-                    Microsoft Teams
+                    Microsoft Teams Pro
                 </h2>
+                <div class="mode-actions">
+                    <button class="action-btn" onclick="window.app.importFromTeams()">
+                        <i class="fas fa-download"></i> Importuj z Teams
+                    </button>
+                    <button class="action-btn" onclick="window.app.syncWithOutlook()">
+                        <i class="fas fa-sync"></i> Synchronizuj z Outlook
+                    </button>
+                </div>
             </div>
 
             <div class="teams-tabs">
@@ -740,6 +1120,9 @@
                     <i class="fas fa-calendar"></i> Nadchodzące
                     <span class="tab-badge" id="upcomingBadge" style="display: none;">0</span>
                 </button>
+                <button class="tab" onclick="window.app.showTeamsTab('recurring', event)">
+                    <i class="fas fa-redo"></i> Cykliczne
+                </button>
                 <button class="tab" onclick="window.app.showTeamsTab('favorites', event)">
                     <i class="fas fa-star"></i> Ulubione
                 </button>
@@ -749,9 +1132,12 @@
                 <button class="tab" onclick="window.app.showTeamsTab('tags', event)">
                     <i class="fas fa-tags"></i> Tagi
                 </button>
+                <button class="tab" onclick="window.app.showTeamsTab('analytics', event)">
+                    <i class="fas fa-chart-pie"></i> Analityka
+                </button>
             </div>
 
-            <!-- New Meeting Tab -->
+            <!-- New Meeting Tab Enhanced -->
             <div id="newTab" class="tab-content active">
                 <div class="input-section glass-card">
                     <h3>Nowe spotkanie</h3>
@@ -768,6 +1154,9 @@
                                 <i class="fas fa-link"></i> Link do spotkania
                             </label>
                             <input type="url" id="meetingLink" placeholder="https://teams.microsoft.com/..." required>
+                            <button type="button" class="generate-link-btn" onclick="window.app.generateMeetingLink()">
+                                <i class="fas fa-magic"></i> Generuj link
+                            </button>
                         </div>
 
                         <div class="form-row">
@@ -790,51 +1179,107 @@
                                 <i class="fas fa-hourglass"></i> Czas trwania (minuty)
                             </label>
                             <input type="number" id="meetingDuration" value="60" min="1" required>
+                            <div class="duration-presets">
+                                <button type="button" onclick="window.app.setDuration(15)">15 min</button>
+                                <button type="button" onclick="window.app.setDuration(30)">30 min</button>
+                                <button type="button" onclick="window.app.setDuration(45)">45 min</button>
+                                <button type="button" onclick="window.app.setDuration(60)">1h</button>
+                                <button type="button" onclick="window.app.setDuration(90)">1.5h</button>
+                                <button type="button" onclick="window.app.setDuration(120)">2h</button>
+                            </div>
                         </div>
 
                         <div class="form-group">
                             <label for="meetingTags">
-                                <i class="fas fa-tags"></i> Tagi (oddzielone przecinkami)
+                                <i class="fas fa-tags"></i> Tagi (rozdziel przecinkami)
                             </label>
-                            <input type="text" id="meetingTags" placeholder="praca, projekt, ważne">
+                            <input type="text" id="meetingTags" placeholder="Np. projekt, zespół, status">
+                            <div id="tagSuggestions" class="tag-suggestions"></div>
                         </div>
 
                         <div class="form-group">
-                            <label for="meetingReminders">
+                            <label for="meetingParticipants">
+                                <i class="fas fa-user-friends"></i> Uczestnicy
+                            </label>
+                            <input type="text" id="meetingParticipants" placeholder="Dodaj uczestników...">
+                            <div id="participantsList" class="participants-list"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="meetingDescription">
+                                <i class="fas fa-align-left"></i> Opis/Agenda
+                            </label>
+                            <textarea id="meetingDescription" rows="3" placeholder="Dodaj opis spotkania lub agendę..."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>
                                 <i class="fas fa-bell"></i> Przypomnienia
                             </label>
                             <div class="reminder-options">
                                 <label>
-                                    <input type="checkbox" name="reminders" value="60" checked>
-                                    <span>1 godzina przed</span>
-                                </label>
-                                <label>
-                                    <input type="checkbox" name="reminders" value="30" checked>
-                                    <span>30 minut przed</span>
+                                    <input type="checkbox" name="reminders" value="5" checked>
+                                    5 minut przed
                                 </label>
                                 <label>
                                     <input type="checkbox" name="reminders" value="15" checked>
-                                    <span>15 minut przed</span>
+                                    15 minut przed
                                 </label>
                                 <label>
-                                    <input type="checkbox" name="reminders" value="5">
-                                    <span>5 minut przed</span>
+                                    <input type="checkbox" name="reminders" value="30">
+                                    30 minut przed
+                                </label>
+                                <label>
+                                    <input type="checkbox" name="reminders" value="60">
+                                    1 godzina przed
+                                </label>
+                                <label>
+                                    <input type="checkbox" name="reminders" value="1440">
+                                    1 dzień przed
                                 </label>
                             </div>
                         </div>
 
-                        <div class="form-group checkbox-group">
-                            <label>
-                                <input type="checkbox" id="autoOpenTeams" checked>
-                                <span>Otwórz Teams automatycznie 2 minuty przed spotkaniem</span>
-                            </label>
+                        <div class="form-group">
+                            <div class="checkbox-group">
+                                <label>
+                                    <input type="checkbox" id="autoOpenTeams" checked>
+                                    <span>Otwórz spotkanie automatycznie</span>
+                                </label>
+                            </div>
+                            <div class="checkbox-group">
+                                <label>
+                                    <input type="checkbox" id="addToFavorites">
+                                    <span>Dodaj do ulubionych</span>
+                                </label>
+                            </div>
+                            <div class="checkbox-group">
+                                <label>
+                                    <input type="checkbox" id="recurringMeeting">
+                                    <span>Spotkanie cykliczne</span>
+                                </label>
+                            </div>
                         </div>
 
-                        <div class="form-group checkbox-group">
-                            <label>
-                                <input type="checkbox" id="addToFavorites">
-                                <span>Dodaj do ulubionych</span>
-                            </label>
+                        <div id="recurringOptions" class="recurring-options" style="display: none;">
+                            <div class="form-group">
+                                <label>
+                                    <i class="fas fa-redo"></i> Powtarzaj co:
+                                </label>
+                                <select id="recurringPattern">
+                                    <option value="daily">Codziennie</option>
+                                    <option value="weekly">Co tydzień</option>
+                                    <option value="biweekly">Co dwa tygodnie</option>
+                                    <option value="monthly">Co miesiąc</option>
+                                    <option value="custom">Niestandardowe</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <i class="fas fa-calendar-check"></i> Zakończ powtarzanie:
+                                </label>
+                                <input type="date" id="recurringEndDate">
+                            </div>
                         </div>
 
                         <button type="submit" class="submit-button">
@@ -844,13 +1289,13 @@
                 </div>
             </div>
 
-            <!-- Upcoming Tab -->
-            <div id="upcomingTab" class="tab-content" style="display: none;">
-                <div class="meetings-list glass-card">
+            <!-- Upcoming Meetings Tab Enhanced -->
+            <div id="upcomingTab" class="tab-content">
+                <div class="meetings-section glass-card">
                     <div class="meetings-header">
                         <h3>Nadchodzące spotkania</h3>
-                        <button class="add-meeting-btn gradient-btn" onclick="window.app.showAddUpcomingMeeting()">
-                            <i class="fas fa-plus-circle"></i> Dodaj spotkanie
+                        <button class="add-meeting-btn" onclick="window.app.showAddUpcomingMeeting()">
+                            <i class="fas fa-plus"></i> Dodaj
                         </button>
                     </div>
                     <div class="meetings-filters">
@@ -861,6 +1306,9 @@
                             <option value="week">Ten tydzień</option>
                             <option value="month">Ten miesiąc</option>
                         </select>
+                        <button class="filter-btn" onclick="window.app.showAdvancedFilters()">
+                            <i class="fas fa-filter"></i> Filtry
+                        </button>
                     </div>
                     <div id="upcomingMeetings" class="meetings-container">
                         <p class="empty-state">Brak zaplanowanych spotkań</p>
@@ -868,9 +1316,19 @@
                 </div>
             </div>
 
+            <!-- Recurring Meetings Tab -->
+            <div id="recurringTab" class="tab-content">
+                <div class="meetings-section glass-card">
+                    <h3>Spotkania cykliczne</h3>
+                    <div id="recurringMeetings" class="meetings-container">
+                        <p class="empty-state">Brak spotkań cyklicznych</p>
+                    </div>
+                </div>
+            </div>
+
             <!-- Favorites Tab -->
-            <div id="favoritesTab" class="tab-content" style="display: none;">
-                <div class="meetings-list glass-card">
+            <div id="favoritesTab" class="tab-content">
+                <div class="meetings-section glass-card">
                     <h3>Ulubione spotkania</h3>
                     <div id="favoriteMeetings" class="meetings-container">
                         <p class="empty-state">Brak ulubionych spotkań</p>
@@ -879,12 +1337,12 @@
             </div>
 
             <!-- History Tab -->
-            <div id="historyTab" class="tab-content" style="display: none;">
-                <div class="meetings-list glass-card">
-                    <div class="history-header">
+            <div id="historyTab" class="tab-content">
+                <div class="meetings-section glass-card">
+                    <div class="meetings-header">
                         <h3>Historia spotkań</h3>
                         <button class="clear-history-btn" onclick="window.app.clearMeetingsHistory()">
-                            <i class="fas fa-trash"></i> Wyczyść
+                            <i class="fas fa-trash"></i> Wyczyść historię
                         </button>
                     </div>
                     <div id="meetingsHistory" class="meetings-container">
@@ -894,122 +1352,124 @@
             </div>
 
             <!-- Tags Tab -->
-            <div id="tagsTab" class="tab-content" style="display: none;">
+            <div id="tagsTab" class="tab-content">
                 <div class="tags-section glass-card">
                     <h3>Zarządzanie tagami</h3>
                     <div class="tag-input-group">
-                        <input type="text" id="newTagInput" placeholder="Nowy tag...">
+                        <input type="text" id="newTagInput" placeholder="Nazwa tagu">
                         <input type="color" id="newTagColor" value="#6366f1">
                         <button onclick="window.app.addNewTag()">
-                            <i class="fas fa-plus"></i> Dodaj
+                            <i class="fas fa-plus"></i> Dodaj tag
                         </button>
                     </div>
                     <div id="tagsList" class="tags-list">
                         <p class="empty-state">Brak tagów</p>
                     </div>
+                    <div class="tags-stats">
+                        <h4>Statystyki tagów</h4>
+                        <div id="tagsChart"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics Tab -->
+            <div id="analyticsTab" class="tab-content">
+                <div class="analytics-section glass-card">
+                    <h3>Analityka spotkań</h3>
+                    <div class="analytics-period">
+                        <button class="period-btn active" onclick="window.app.setAnalyticsPeriod('week')">Tydzień</button>
+                        <button class="period-btn" onclick="window.app.setAnalyticsPeriod('month')">Miesiąc</button>
+                        <button class="period-btn" onclick="window.app.setAnalyticsPeriod('year')">Rok</button>
+                    </div>
+                    <div class="analytics-grid">
+                        <div class="analytics-card">
+                            <h4>Całkowity czas spotkań</h4>
+                            <div class="analytics-value" id="totalMeetingTime">0h 0m</div>
+                            <canvas id="meetingTimeChart"></canvas>
+                        </div>
+                        <div class="analytics-card">
+                            <h4>Średni czas spotkania</h4>
+                            <div class="analytics-value" id="avgMeetingTime">0m</div>
+                        </div>
+                        <div class="analytics-card">
+                            <h4>Najpopularniejsze godziny</h4>
+                            <canvas id="popularHoursChart"></canvas>
+                        </div>
+                        <div class="analytics-card">
+                            <h4>Typy spotkań</h4>
+                            <canvas id="meetingTypesChart"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- YouTube Mode -->
+        <!-- YouTube Mode Enhanced -->
         <div id="youtubeMode" class="mode-container" style="display: none;">
             <div class="mode-header">
                 <button class="back-button" onclick="window.app.showMainMenu()">
                     <i class="fas fa-arrow-left"></i> Powrót
                 </button>
-                <h2><i class="fab fa-youtube"></i> YouTube</h2>
+                <h2>
+                    <i class="fab fa-youtube"></i>
+                    YouTube Pro
+                </h2>
+                <div class="mode-actions">
+                    <button class="action-btn" onclick="window.app.connectYouTubeAPI()">
+                        <i class="fas fa-plug"></i> Połącz z YouTube
+                    </button>
+                    <button class="action-btn" onclick="window.app.importWatchLater()">
+                        <i class="fas fa-clock"></i> Importuj "Zobacz później"
+                    </button>
+                </div>
             </div>
 
             <div class="youtube-tabs">
-                <button class="tab active" onclick="window.app.showYouTubeTab('search', event)">
+                <button class="tab active" onclick="window.app.showYouTubeTab('timer', event)">
+                    <i class="fas fa-clock"></i> Timer
+                </button>
+                <button class="tab" onclick="window.app.showYouTubeTab('search', event)">
                     <i class="fas fa-search"></i> Wyszukaj
                 </button>
                 <button class="tab" onclick="window.app.showYouTubeTab('favorites', event)">
                     <i class="fas fa-star"></i> Ulubione
                 </button>
-                <button class="tab" onclick="window.app.showYouTubeTab('history', event)">
-                    <i class="fas fa-history"></i> Historia
-                </button>
-                <button class="tab" onclick="window.app.showYouTubeTab('plan', event)">
-                    <i class="fas fa-calendar-plus"></i> Zaplanuj
-                </button>
                 <button class="tab" onclick="window.app.showYouTubeTab('playlists', event)">
                     <i class="fas fa-list"></i> Playlisty
                 </button>
+                <button class="tab" onclick="window.app.showYouTubeTab('history', event)">
+                    <i class="fas fa-history"></i> Historia
+                </button>
+                <button class="tab" onclick="window.app.showYouTubeTab('recommendations', event)">
+                    <i class="fas fa-thumbs-up"></i> Rekomendacje
+                </button>
+                <button class="tab" onclick="window.app.showYouTubeTab('stats', event)">
+                    <i class="fas fa-chart-bar"></i> Statystyki
+                </button>
             </div>
 
-            <!-- Search Tab -->
-            <div id="searchTab" class="tab-content active">
-                <div class="search-section glass-card">
-                    <div class="search-type-selector">
-                        <button class="search-type active" data-type="video" onclick="window.app.setSearchType(this)">
-                            <i class="fas fa-video"></i> Filmy
-                        </button>
-                        <button class="search-type" data-type="channel" onclick="window.app.setSearchType(this)">
-                            <i class="fas fa-tv"></i> Kanały
-                        </button>
-                        <button class="search-type" data-type="playlist" onclick="window.app.setSearchType(this)">
-                            <i class="fas fa-list"></i> Playlisty
-                        </button>
-                    </div>
-
-                    <div class="search-input-group">
-                        <input type="text" id="youtubeSearch" placeholder="Czego szukasz?" class="search-input" onkeypress="if(event.key==='Enter'){window.app.searchYouTube()}">
-                        <button class="search-button" onclick="window.app.searchYouTube()">
-                            <i class="fas fa-search"></i>
-                        </button>
-                    </div>
-
-                    <div class="search-status-yt" id="youtubeSearchStatus" style="display: none;">
-                        <div class="search-spinner"></div>
-                        <span>Wyszukiwanie YouTube TimerHub...</span>
-                    </div>
-
-                    <div id="searchResults" class="search-results"></div>
-                </div>
-            </div>
-
-            <!-- Favorites Tab -->
-            <div id="favoritesTabYT" class="tab-content" style="display: none;">
-                <div class="favorites-section glass-card">
-                    <div class="favorites-header">
-                        <h3>Ulubione kanały</h3>
-                        <button class="add-favorite-btn gradient-btn" onclick="window.app.showAddFavorite()">
-                            <i class="fas fa-plus-circle"></i> 
-                            <span>Dodaj kanał</span>
-                        </button>
-                    </div>
-                    <div id="favoriteChannelsList" class="channels-grid">
-                        <p class="empty-state">Brak ulubionych kanałów</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- History Tab -->
-            <div id="historyTabYT" class="tab-content" style="display: none;">
-                <div class="history-section glass-card">
-                    <div class="history-header">
-                        <h3>Historia oglądania</h3>
-                        <button class="clear-history-btn" onclick="window.app.clearHistory()">
-                            <i class="fas fa-trash"></i> Wyczyść
-                        </button>
-                    </div>
-                    <div id="watchHistory" class="history-list">
-                        <p class="empty-state">Historia jest pusta</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Plan Tab -->
-            <div id="planTab" class="tab-content" style="display: none;">
-                <div class="plan-section glass-card">
-                    <h3>Zaplanuj oglądanie</h3>
+            <!-- Timer Tab -->
+            <div id="timerTab" class="tab-content active">
+                <div class="input-section glass-card">
+                    <h3>Ustaw timer dla filmu</h3>
                     <form id="youtubeForm" onsubmit="window.app.handleYouTubeSubmit(event)">
                         <div class="form-group">
                             <label for="videoUrl">
                                 <i class="fas fa-link"></i> Link do filmu
                             </label>
-                            <input type="url" id="videoUrl" placeholder="https://www.youtube.com/watch?v=..." required>
+                            <input type="url" id="videoUrl" placeholder="https://youtube.com/watch?v=..." required>
+                            <button type="button" class="fetch-info-btn" onclick="window.app.fetchVideoInfo()">
+                                <i class="fas fa-info-circle"></i> Pobierz informacje
+                            </button>
+                        </div>
+
+                        <div id="videoInfo" class="video-info" style="display: none;">
+                            <img id="videoThumbnail" src="" alt="">
+                            <div class="video-details">
+                                <h4 id="videoTitle"></h4>
+                                <p id="videoChannel"></p>
+                                <p id="videoDurationInfo"></p>
+                            </div>
                         </div>
 
                         <div class="form-row">
@@ -1029,9 +1489,39 @@
 
                         <div class="form-group">
                             <label for="videoDuration">
-                                <i class="fas fa-hourglass"></i> Czas oglądania (minuty)
+                                <i class="fas fa-hourglass"></i> Przewidywany czas oglądania (minuty)
                             </label>
                             <input type="number" id="videoDuration" value="30" min="1" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="videoPlaylist">
+                                <i class="fas fa-list"></i> Dodaj do playlisty
+                            </label>
+                            <select id="videoPlaylist">
+                                <option value="">Wybierz playlistę...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <div class="checkbox-group">
+                                <label>
+                                    <input type="checkbox" id="autoPlayVideo" checked>
+                                    <span>Odtwórz automatycznie</span>
+                                </label>
+                            </div>
+                            <div class="checkbox-group">
+                                <label>
+                                    <input type="checkbox" id="addToHistory">
+                                    <span>Dodaj do historii</span>
+                                </label>
+                            </div>
+                            <div class="checkbox-group">
+                                <label>
+                                    <input type="checkbox" id="notifyOnEnd">
+                                    <span>Powiadom po zakończeniu</span>
+                                </label>
+                            </div>
                         </div>
 
                         <button type="submit" class="submit-button">
@@ -1041,13 +1531,82 @@
                 </div>
             </div>
 
-            <!-- Playlists Tab -->
-            <div id="playlistsTab" class="tab-content" style="display: none;">
+            <!-- Search Tab Enhanced -->
+            <div id="searchTab" class="tab-content">
+                <div class="search-section glass-card">
+                    <h3>Wyszukaj na YouTube</h3>
+                    <div class="search-type-selector">
+                        <button class="search-type active" data-type="video" onclick="window.app.setSearchType(this)">
+                            <i class="fas fa-video"></i> Filmy
+                        </button>
+                        <button class="search-type" data-type="channel" onclick="window.app.setSearchType(this)">
+                            <i class="fas fa-tv"></i> Kanały
+                        </button>
+                        <button class="search-type" data-type="playlist" onclick="window.app.setSearchType(this)">
+                            <i class="fas fa-list"></i> Playlisty
+                        </button>
+                        <button class="search-type" data-type="live" onclick="window.app.setSearchType(this)">
+                            <i class="fas fa-broadcast-tower"></i> Na żywo
+                        </button>
+                    </div>
+                    <div class="search-input-group">
+                        <input type="text" id="youtubeSearch" class="search-input" placeholder="Czego szukasz?" onkeypress="if(event.key==='Enter') window.app.searchYouTube()">
+                        <button class="search-button" onclick="window.app.searchYouTube()">
+                            <i class="fas fa-search"></i> Szukaj
+                        </button>
+                    </div>
+                    <div class="search-filters">
+                        <select id="searchDuration">
+                            <option value="">Dowolna długość</option>
+                            <option value="short">Krótkie (< 4 min)</option>
+                            <option value="medium">Średnie (4-20 min)</option>
+                            <option value="long">Długie (> 20 min)</option>
+                        </select>
+                        <select id="searchSort">
+                            <option value="relevance">Trafność</option>
+                            <option value="date">Data dodania</option>
+                            <option value="viewCount">Liczba wyświetleń</option>
+                            <option value="rating">Ocena</option>
+                        </select>
+                        <select id="searchUpload">
+                            <option value="">Kiedykolwiek</option>
+                            <option value="hour">Ostatnia godzina</option>
+                            <option value="today">Dzisiaj</option>
+                            <option value="week">Ten tydzień</option>
+                            <option value="month">Ten miesiąc</option>
+                            <option value="year">Ten rok</option>
+                        </select>
+                    </div>
+                    <div class="search-status-yt" id="youtubeSearchStatus" style="display: none;">
+                        <div class="search-spinner"></div>
+                        <span>Wyszukiwanie na YouTube...</span>
+                    </div>
+                    <div id="youtubeSearchResults" class="search-results-grid"></div>
+                </div>
+            </div>
+
+            <!-- Favorites Tab -->
+            <div id="favoritesTabYT" class="tab-content">
+                <div class="favorites-section glass-card">
+                    <div class="favorites-header">
+                        <h3>Ulubione kanały</h3>
+                        <button class="add-favorite-btn" onclick="window.app.showAddFavorite()">
+                            <i class="fas fa-plus"></i> Dodaj kanał
+                        </button>
+                    </div>
+                    <div id="favoriteChannelsList" class="channels-grid">
+                        <p class="empty-state">Brak ulubionych kanałów</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Playlists Tab Enhanced -->
+            <div id="playlistsTab" class="tab-content">
                 <div class="playlists-section glass-card">
                     <div class="playlists-header">
                         <h3>Moje playlisty</h3>
-                        <button class="add-playlist-btn gradient-btn" onclick="window.app.createPlaylist()">
-                            <i class="fas fa-plus-circle"></i> Nowa playlista
+                        <button class="add-playlist-btn" onclick="window.app.createPlaylist()">
+                            <i class="fas fa-plus"></i> Nowa playlista
                         </button>
                     </div>
                     <div id="playlistsList" class="playlists-container">
@@ -1055,24 +1614,101 @@
                     </div>
                 </div>
             </div>
+
+            <!-- History Tab -->
+            <div id="historyTabYT" class="tab-content">
+                <div class="history-section glass-card">
+                    <div class="history-header">
+                        <h3>Historia oglądania</h3>
+                        <button class="clear-history-btn" onclick="window.app.clearHistory()">
+                            <i class="fas fa-trash"></i> Wyczyść historię
+                        </button>
+                    </div>
+                    <div id="watchHistory" class="history-list">
+                        <p class="empty-state">Historia jest pusta</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recommendations Tab -->
+            <div id="recommendationsTab" class="tab-content">
+                <div class="recommendations-section glass-card">
+                    <h3>Rekomendacje dla Ciebie</h3>
+                    <div class="recommendation-categories">
+                        <button class="category-btn active" onclick="window.app.loadRecommendations('all')">Wszystkie</button>
+                        <button class="category-btn" onclick="window.app.loadRecommendations('music')">Muzyka</button>
+                        <button class="category-btn" onclick="window.app.loadRecommendations('gaming')">Gaming</button>
+                        <button class="category-btn" onclick="window.app.loadRecommendations('education')">Edukacja</button>
+                        <button class="category-btn" onclick="window.app.loadRecommendations('tech')">Technologia</button>
+                    </div>
+                    <div id="recommendationsList" class="recommendations-grid">
+                        <p class="empty-state">Ładowanie rekomendacji...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats Tab -->
+            <div id="statsTab" class="tab-content">
+                <div class="stats-section glass-card">
+                    <h3>Statystyki oglądania</h3>
+                    <div class="stats-overview">
+                        <div class="stat-box">
+                            <i class="fas fa-play-circle"></i>
+                            <div class="stat-info">
+                                <div class="stat-number" id="totalWatchTime">0h 0m</div>
+                                <div class="stat-label">Całkowity czas</div>
+                            </div>
+                        </div>
+                        <div class="stat-box">
+                            <i class="fas fa-calendar-check"></i>
+                            <div class="stat-info">
+                                <div class="stat-number" id="watchStreak">0</div>
+                                <div class="stat-label">Dni z rzędu</div>
+                            </div>
+                        </div>
+                        <div class="stat-box">
+                            <i class="fas fa-video"></i>
+                            <div class="stat-info">
+                                <div class="stat-number" id="videosWatched">0</div>
+                                <div class="stat-label">Filmów obejrzanych</div>
+                            </div>
+                        </div>
+                        <div class="stat-box">
+                            <i class="fas fa-heart"></i>
+                            <div class="stat-info">
+                                <div class="stat-number" id="favoriteGenre">-</div>
+                                <div class="stat-label">Ulubiona kategoria</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stats-charts">
+                        <div class="chart-container">
+                            <h4>Czas oglądania w tym tygodniu</h4>
+                            <canvas id="weeklyWatchChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h4>Kategorie filmów</h4>
+                            <canvas id="categoriesChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <!-- Timer Display -->
+        <!-- Timer Display Enhanced -->
         <div id="timerDisplay" class="timer-display" style="display: none;">
             <div class="timer-content">
                 <button class="close-timer" onclick="window.app.closeTimer()">
                     <i class="fas fa-times"></i>
                 </button>
-                
                 <div class="timer-info">
                     <div class="timer-icon" id="timerIcon">
-                        <i class="fas fa-users"></i>
+                        <i class="fas fa-clock"></i>
                     </div>
-                    <h2 id="timerTitle">Spotkanie Teams</h2>
+                    <h3 id="timerTitle">Timer</h3>
                     <p id="timerSubtitle">Rozpoczęcie za...</p>
                 </div>
-
-                <div class="timer-countdown" id="timerCountdown">
+                <div class="timer-countdown">
                     <div class="time-unit">
                         <span class="time-value" id="days">00</span>
                         <span class="time-label">Dni</span>
@@ -1090,7 +1726,6 @@
                         <span class="time-label">Sekundy</span>
                     </div>
                 </div>
-
                 <div class="timer-progress">
                     <div class="progress-bar">
                         <div class="progress-fill" id="progressFill"></div>
@@ -1100,13 +1735,15 @@
                         <span id="progressEnd">--:--</span>
                     </div>
                 </div>
-
                 <div class="timer-actions">
-                    <button class="timer-action-btn" onclick="window.app.openNotesForTimer()">
-                        <i class="fas fa-sticky-note"></i> Notatki
+                    <button class="timer-action-btn" onclick="window.app.openTimerLink()">
+                        <i class="fas fa-external-link-alt"></i> Otwórz teraz
                     </button>
                     <button class="timer-action-btn" id="pauseBtn" onclick="window.app.togglePause()">
                         <i class="fas fa-pause"></i> Pauza
+                    </button>
+                    <button class="timer-action-btn" onclick="window.app.openNotesForTimer()">
+                        <i class="fas fa-sticky-note"></i> Notatki
                     </button>
                     <button class="timer-action-btn danger" onclick="window.app.stopTimer()">
                         <i class="fas fa-stop"></i> Zatrzymaj
@@ -1119,15 +1756,15 @@
         <div id="activeTimerNotification" class="active-timer-notification" style="display: none;">
             <div class="notification-content">
                 <i class="fas fa-clock"></i>
-                <span id="activeTimerText">Aktywne odliczanie</span>
-                <button onclick="window.app.showTimer()">Otwórz</button>
+                <span id="activeTimerText">Timer aktywny</span>
+                <button onclick="window.app.showTimer()">Pokaż</button>
             </div>
         </div>
 
-        <!-- Pomodoro Timer -->
+        <!-- Pomodoro Timer Widget -->
         <div id="pomodoroTimer" class="pomodoro-timer" style="display: none;">
             <div class="pomodoro-content">
-                <h3>Tryb Pomodoro</h3>
+                <h3>Pomodoro</h3>
                 <div class="pomodoro-display">
                     <span id="pomodoroMinutes">25</span>:<span id="pomodoroSeconds">00</span>
                 </div>
@@ -1144,173 +1781,166 @@
                     </button>
                 </div>
                 <div class="pomodoro-stats">
-                    <span>Sesje: <strong id="pomodoroSessions">0</strong></span>
+                    Sesje: <span id="pomodoroSessions">0</span>
                 </div>
             </div>
         </div>
 
-        <!-- Notifications -->
+        <!-- Focus Mode Overlay -->
+        <div id="focusModeOverlay" class="focus-mode-overlay" style="display: none;">
+            <div class="focus-mode-content">
+                <h2>Tryb skupienia aktywny</h2>
+                <p>Wszystkie rozpraszacze zostały ukryte</p>
+                <div class="focus-timer" id="focusTimer">00:00:00</div>
+                <button onclick="window.app.exitFocusMode()">
+                    <i class="fas fa-times"></i> Zakończ tryb skupienia
+                </button>
+            </div>
+        </div>
+
+        <!-- Tasks Modal -->
+        <div id="tasksModal" class="modal">
+            <div class="modal-content modal-large">
+                <div class="modal-header">
+                    <h3><i class="fas fa-check-circle"></i> Zadania do wykonania</h3>
+                    <button class="modal-close" onclick="window.app.closeTasksModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="task-input-group">
+                        <input type="text" id="newTaskInput" placeholder="Dodaj nowe zadanie...">
+                        <input type="date" id="taskDueDate">
+                        <select id="taskPriority">
+                            <option value="low">Niski priorytet</option>
+                            <option value="medium">Średni priorytet</option>
+                            <option value="high">Wysoki priorytet</option>
+                        </select>
+                        <button onclick="window.app.addTask()">
+                            <i class="fas fa-plus"></i> Dodaj
+                        </button>
+                    </div>
+                    <div class="tasks-filters">
+                        <button class="task-filter active" onclick="window.app.filterTasks('all')">Wszystkie</button>
+                        <button class="task-filter" onclick="window.app.filterTasks('active')">Aktywne</button>
+                        <button class="task-filter" onclick="window.app.filterTasks('completed')">Ukończone</button>
+                        <button class="task-filter" onclick="window.app.filterTasks('overdue')">Przeterminowane</button>
+                    </div>
+                    <div id="tasksList" class="tasks-list">
+                        <p class="empty-state">Brak zadań</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Goals Modal -->
+        <div id="goalsModal" class="modal">
+            <div class="modal-content modal-large">
+                <div class="modal-header">
+                    <h3><i class="fas fa-bullseye"></i> Cele i osiągnięcia</h3>
+                    <button class="modal-close" onclick="window.app.closeGoalsModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="goals-categories">
+                        <button class="goal-category active" onclick="window.app.showGoalCategory('daily')">Dzienne</button>
+                        <button class="goal-category" onclick="window.app.showGoalCategory('weekly')">Tygodniowe</button>
+                        <button class="goal-category" onclick="window.app.showGoalCategory('monthly')">Miesięczne</button>
+                        <button class="goal-category" onclick="window.app.showGoalCategory('achievements')">Osiągnięcia</button>
+                    </div>
+                    <div id="goalsContent" class="goals-content">
+                        <div class="goal-item">
+                            <div class="goal-icon">
+                                <i class="fas fa-calendar-day"></i>
+                            </div>
+                            <div class="goal-info">
+                                <h4>Codzienne spotkanie</h4>
+                                <p>Weź udział w przynajmniej jednym spotkaniu</p>
+                                <div class="goal-progress">
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="width: 0%"></div>
+                                    </div>
+                                    <span>0/1</span>
+                                </div>
+                            </div>
+                            <div class="goal-reward">
+                                <i class="fas fa-coins"></i> +10 pkt
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notifications Container -->
         <div id="notifications" class="notifications"></div>
     </div>
 
-    <!-- Firebase -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, signInWithCredential, GoogleAuthProvider, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getDatabase, ref, set, get, onValue, push, serverTimestamp, onDisconnect, remove, query, orderByChild, limitToLast, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-
-        // Your web app's Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyA2vwaCsdHC56t6AOxst76PlxkQQrbJaF8",
-            authDomain: "timer-hub-app-374ed.firebaseapp.com",
-            databaseURL: "https://timer-hub-app-374ed-default-rtdb.firebaseio.com",
-            projectId: "timer-hub-app-374ed",
-            storageBucket: "timer-hub-app-374ed.firebasestorage.app",
-            messagingSenderId: "39373932173",
-            appId: "1:39373932173:web:a793bfd1d749d15e0d84c4"
-        };
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const database = getDatabase(app);
-
-        // Expose Firebase to global scope
-        window.firebase = {
-            app,
-            auth,
-            database,
-            ref,
-            set,
-            get,
-            onValue,
-            push,
-            serverTimestamp,
-            onDisconnect,
-            remove,
-            signInWithCredential,
-            GoogleAuthProvider,
-            onAuthStateChanged,
-            query,
-            orderByChild,
-            limitToLast,
-            signInAnonymously,
-            update
-        };
-
-        console.log('Firebase initialized successfully');
-    </script>
-
-    <script src="script.js"></script>
-    
-    <!-- Google Sign-In Script -->
+    <!-- Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
     <script>
-        function loadGoogleSignIn() {
-            // Check if user is already logged in
-            const savedUser = localStorage.getItem('currentUser');
-            if (savedUser) {
-                // User is logged in, don't load Google Sign-In
-                return;
-            }
-            
-            const script = document.createElement('script');
-            script.src = 'https://accounts.google.com/gsi/client';
-            script.async = true;
-            script.defer = true;
-            script.onload = function() {
-                if (typeof google !== 'undefined' && google.accounts) {
-                    initializeGoogleSignIn();
-                }
-            };
-            script.onerror = function() {
-                console.error('Failed to load Google Sign-In');
-                showGoogleSignInError();
-            };
-            document.head.appendChild(script);
-        }
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBkkFF0XhNZeWuDmOfEhsgdfX1VBG7WTas",
+            authDomain: "timerhubb.firebaseapp.com",
+            databaseURL: "https://timerhubb-default-rtdb.firebaseio.com",
+            projectId: "timerhubb",
+            storageBucket: "timerhubb.firebasestorage.app",
+            messagingSenderId: "581326886241",
+            appId: "1:581326886241:web:af4233dd53e4bab0f60358"
+        };
         
-        function initializeGoogleSignIn() {
-            try {
-                google.accounts.id.initialize({
-                    client_id: "630173406824-ada5j713qsm99do8e98fvbiiq61j59dj.apps.googleusercontent.com",
-                    callback: handleCredentialResponse,
-                    auto_select: false,
-                    cancel_on_tap_outside: true,
-                    ux_mode: 'popup',
-                    context: 'signin',
-                    itp_support: true
-                });
-                
-                google.accounts.id.renderButton(
-                    document.getElementById("googleSignInButton"),
-                    { 
-                        theme: "filled_blue",
-                        size: "large",
-                        width: 300,
-                        text: "signin_with",
-                        shape: "rectangular",
-                        logo_alignment: "left",
-                        locale: "pl"
-                    }
-                );
-            } catch (error) {
-                console.error('Error initializing Google Sign-In:', error);
-                showGoogleSignInError();
-            }
-        }
-        function handleCredentialResponse(response) {
-            try {
-                const responsePayload = decodeJwtResponse(response.credential);
-                console.log('User logged in:', responsePayload.email);
-                
-                if (window.app) {
-                    window.app.handleGoogleLogin(responsePayload, response.credential);
-                } else {
-                    // Save for later processing
-                    localStorage.setItem('pendingGoogleLogin', JSON.stringify({
-                        userInfo: responsePayload,
-                        credential: response.credential
-                    }));
-                    location.reload();
-                }
-            } catch (error) {
-                console.error('Error handling login:', error);
-                alert('Błąd logowania. Spróbuj ponownie.');
-            }
-        }
-        
-        function decodeJwtResponse(token) {
-            const base64Url = token.split('.')[1];
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-            }).join(''));
-            return JSON.parse(jsonPayload);
-        }
-        
-        function showGoogleSignInError() {
-            const buttonContainer = document.getElementById("googleSignInButton");
-            if (buttonContainer) {
-                buttonContainer.innerHTML = `
-                    <div style="text-align: center;">
-                        <p style="color: #f59e0b; margin-bottom: 15px;">
-                            <i class="fas fa-exclamation-triangle"></i> 
-                            Problem z Google Sign-In
-                        </p>
-                        <p style="color: var(--text-secondary); font-size: 0.9rem;">
-                            Odśwież stronę i spróbuj ponownie
-                        </p>
-                    </div>
-                `;
-            }
-        }
-        
-        // Start loading
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', loadGoogleSignIn);
-        } else {
-            loadGoogleSignIn();
-        }
+        // Initialize Firebase
+        window.firebase = firebase;
+        firebase.initializeApp(firebaseConfig);
     </script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+        // Google Sign-In initialization
+        function initializeGoogleSignIn() {
+            google.accounts.id.initialize({
+                client_id: '630173406824-ada5j713qsm99do8e98fvbiiq61j59dj.apps.googleusercontent.com',
+                callback: handleGoogleSignIn,
+                auto_prompt: false
+            });
+            
+            google.accounts.id.renderButton(
+                document.getElementById('googleSignInButton'),
+                { 
+                    theme: 'filled_blue',
+                    size: 'large',
+                    text: 'continue_with',
+                    width: 250
+                }
+            );
+        }
+        
+        function handleGoogleSignIn(response) {
+            const credential = response.credential;
+            const payload = JSON.parse(atob(credential.split('.')[1]));
+            const userInfo = {
+                email: payload.email,
+                name: payload.name,
+                picture: payload.picture,
+                sub: payload.sub
+            };
+            
+            localStorage.setItem('pendingGoogleLogin', JSON.stringify({
+                credential: credential,
+                userInfo: userInfo
+            }));
+            
+            location.reload();
+        }
+        
+        window.onload = function() {
+            setTimeout(initializeGoogleSignIn, 100);
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
