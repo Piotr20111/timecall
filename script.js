@@ -1425,7 +1425,6 @@ ${notes.after || 'Brak notatek'}
                 </div>
                 <div class="stat-item">
                     <i class="fas fa-fire"></i>
-                    <div>
                         <div class="stat-value">${activeDays}</div>
                         <div class="stat-label">Dni aktywności</div>
                     </div>
